@@ -7,7 +7,9 @@
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
-# Same ToUs of the core plugin LeTBS
+# This plugin is under the MIT License.
+# (http://choosealicense.com/licenses/mit/)
+# In addition, you should keep this header.
 #-----------------------------------------------------------------------------
 # Version History
 #-----------------------------------------------------------------------------
@@ -25,7 +27,7 @@ Lecode.S_TBS.DamagePopupEX = {};
  * @version 1.0
  *
  * @help
- * See the documentation
+ * ...
  */
 //#=============================================================================
 

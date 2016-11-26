@@ -7,7 +7,9 @@
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
-# Same ToUs of the core plugin LeTBS
+# This plugin is under the MIT License.
+# (http://choosealicense.com/licenses/mit/)
+# In addition, you should keep this header.
 #-----------------------------------------------------------------------------
 # Version History
 #-----------------------------------------------------------------------------
@@ -24,6 +26,10 @@ Lecode.S_TBS.TilesMarksAura = {};
  * @author Lecode
  * @version 1.0
  *
+* @param Tile Effect Launcher
+* @desc ID of the enemy who launch terrain effects.
+* @default 10
+*
  * @help
  * See the documentation
  */
@@ -33,7 +39,9 @@ Lecode.S_TBS.TilesMarksAura = {};
 /*-------------------------------------------------------------------------
 * Get Parameters
 -------------------------------------------------------------------------*/
-Lecode.S_TBS.TilesMarksAura.tileEffectLauncher = 10;
+var parameters = PluginManager.parameters('LeTBS_TilesMarksAuraEffects');
+
+Lecode.S_TBS.TilesMarksAura.tileEffectLauncher = Number(parameters["Tile Effect Launcher"] || 10);	//	(): ID of the enemy who launch terrain effects.
 
 
 

@@ -7,11 +7,9 @@
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
-# This plugin and all its add-ons made by Lecode is under CC-BY-SA-4.0.
-# (http://choosealicense.com/licenses/cc-by-sa-4.0/)
+# This plugin and all its add-ons made by Lecode is under the MIT License.
+# (http://choosealicense.com/licenses/mit/)
 # In addition, you should keep this header.
-# If you appreciate it and want more feature, considere to support me on
-# my patreon page. https://www.patreon.com/lecodeMV
 #-----------------------------------------------------------------------------
 # Version History
 #-----------------------------------------------------------------------------
@@ -44,6 +42,7 @@
 #		  battle start, turn start, victory, death, damaged, healed, buffed, weakened.
 # - 0.5 : Projectile system completed
 #         Tile, Mark & Aura effects completed
+#         Fixed and added some sequence commands
 #         Fixed some bugs
 #         Created DamagePopupEX
 #=============================================================================
@@ -58,6 +57,286 @@ Lecode.S_TBS = {};
  * @author Lecode
  * @version 0.5
  *
+* @param Ally Color Cell
+* @desc Color of actor cells.
+* @default #0FC50B
+*
+* @param Enemy Color Cell
+* @desc Color of enemy cells.
+* @default #C50B1B
+*
+* @param Cell Opacity Color
+* @desc Opacity of the placement cells.
+* @default 175
+*
+* @param Placed Animation
+* @desc Animation ID when a battler is placed.
+* @default 124
+*
+* @param -- Misc --
+* @desc ...
+* @default 
+*
+* @param Exploration Input
+* @desc Input to trigger exploration.
+* @default shift
+*
+* @param Opacity Input
+* @desc Input to change windows' opacity.
+* @default control
+*
+* @param Min Input Opacity
+* @desc Minimum opacity of windows.
+* @default 0
+*
+* @param Opacity Steps
+* @desc Value of opacity to reduce when inputed.
+* @default 10
+*
+* @param Battle Start Sprite Delay
+* @desc Duration of the battle start sprite.
+* @default 50
+*
+* @param Turn Order Fair Repartition ?
+* @desc Allow a fair repartition of the turn order ?
+* @default true
+*
+* @param Destination Duration
+* @desc Duration of the destination sprite (when a cell is selected).
+* @default 60
+*
+* @param -- Scopes --
+* @desc ...
+* @default 
+*
+* @param Scope Cell Width
+* @desc Width of cells.
+* @default 46
+*
+* @param Scope Cell Height
+* @desc Height of cells. 
+* @default 46
+*
+* @param Obstacle Region Id
+* @desc Region ID for obstacles.
+* @default 250
+*
+* @param -- Move Action --
+* @desc ...
+* @default 
+*
+* @param Default Move Scope
+* @desc Default move scope data.
+* @default circle(_mp_)
+*
+* @param Default Move Points
+* @desc Default amount of move points.
+* @default 3
+*
+* @param Move Scope Color
+* @desc Color of the move scope.
+* @default #0A5C85
+*
+* @param Move Scope Opacity
+* @desc Opacity of the move scope.
+* @default 175
+*
+* @param Invalid Move Scope Opacity
+* @desc Opacity of the move scope when cells are invalid.
+* @default 60
+*
+* @param Selected Move Scope Opacity
+* @desc Opacity of the move scope when cells are selected.
+* @default 255
+*
+* @param Enable Directional Facing
+* @desc Battlers will be allowed to change their direction.
+* @default true
+*
+* @param -- Attack Action --
+* @desc ...
+* @default 
+*
+* @param Default Attack Animation
+* @desc Default attack animation.
+* @default 1
+*
+* @param Default Attack Sequence
+* @desc Default attack sequence.
+* @default atk
+*
+* @param Default Attack Scope
+* @desc Default attack scope data.
+* @default circle(1)
+*
+* @param Default Attack Ao E
+* @desc Default attack aoe data.
+* @default circle(0)
+*
+* @param Attack Scope Color
+* @desc Color of the attack scope.
+* @default #DF3A01
+*
+* @param Attack Scope Opacity
+* @desc Opacity of the attack scope.
+* @default 175
+*
+* @param Invalid Attack Scope Opacity
+* @desc Opacity of the attack scope when cells are invalid.
+* @default 60
+*
+* @param Selected Attack Scope Opacity
+* @desc Opacity of the attack scope when cells are selected.
+* @default 255
+*
+* @param -- Skill Action --
+* @desc ...
+* @default 
+*
+* @param Default Skill Sequence
+* @desc Default skill sequence.
+* @default skill
+*
+* @param Default Skill Scope
+* @desc Default skill scope data.
+* @default circle(3)
+*
+* @param Default Skill Ao E
+* @desc Default skill aoe data.
+* @default circle(0)
+*
+* @param Skill Scope Color
+* @desc Color of the skill scope.
+* @default #DF3A01
+*
+* @param Skill Scope Opacity
+* @desc Opacity of the skill scope.
+* @default 175
+*
+* @param Invalid Skill Scope Opacity
+* @desc Opacity of the skill scope when cells are invalid.
+* @default 60
+*
+* @param Selected Skill Scope Opacity
+* @desc Opacity of the skill scope when cells are selected.
+* @default 255
+*
+* @param -- Item Action --
+* @desc ...
+* @default 
+*
+* @param Default Item Sequence
+* @desc Default item sequence.
+* @default item
+*
+* @param Default Item Scope
+* @desc Default item scope data.
+* @default circle(3)
+*
+* @param Default Item Ao E
+* @desc Default item aoe data.
+* @default circle(0)
+*
+* @param Item Scope Color
+* @desc Color of the item scope.
+* @default #DF01D7
+*
+* @param Item Scope Opacity
+* @desc Opacity of the item scope.
+* @default 175
+*
+* @param Invalid Item Scope Opacity
+* @desc Opacity of the item scope when cells are invalid.
+* @default 60
+*
+* @param Selected Item Scope Opacity
+* @desc Opacity of the item scope when cells are selected.
+* @default 255
+*
+* @param -- Directional Damage --
+* @desc ...
+* @default 
+*
+* @param Back Directional Damage Effects
+* @desc Damage % when a battler is hit on the back.
+* @default 15
+*
+* @param Side Directional Damage Effects
+* @desc Damage % when a battler is hit on the sides.
+* @default 0
+*
+* @param Face Directional Damage Effects
+* @desc Damage % when a battler is hit on the face.
+* @default -10
+*
+* @param -- Collision Damage --
+* @desc ...
+* @default 
+*
+* @param Default Collision Formula
+* @desc Formula to evaluate collision damage.
+* @default b.mhp * 0.05 * (distance-covered)
+*
+* @param Collission Damage Chain Rate
+* @desc Collision damage chain rate.
+* @default 0.3
+*
+* @param -- Motions --
+* @desc ...
+* @default 
+*
+* @param Battlers Move Speed
+* @desc Default move speed.
+* @default 4
+*
+* @param Battlers Frame Delay
+* @desc Default delay value between sprites frames.
+* @default 10
+*
+* @param -- AI --
+* @desc ...
+* @default 
+*
+* @param Default Ai Pattern
+* @desc Default AI pattern.
+* @default melee_fighter
+*
+* @param Ai Wait Time
+* @desc AI wait time.
+* @default 5
+*
+* @param -- Actions Restrictions --
+* @desc ...
+* @default 
+*
+* @param One Time Move
+* @desc Enable the one time move feature. (See doc)
+* @default false
+*
+* @param One Time Offense
+* @desc Enable the one time offense feature. (See doc)
+* @default true
+*
+* @param Auto Pass
+* @desc Enable the auto pass feature. (See doc)
+* @default true
+*
+* @param -- Battle End --
+* @desc ...
+* @default 
+*
+* @param Escape Sound
+* @desc Sound when the party try to escape.
+* @default Buzzer2
+*
+* @param End Of Battle Wait
+* @desc Wait amount before the end of the battle.
+* @default 60
+*
+* @param Collapse Animation
+* @desc Default collapse animation.
+* @default 136
+*
  * @help
  * See the documentation
  */
@@ -68,86 +347,80 @@ Lecode.S_TBS = {};
 * Get Parameters
 -------------------------------------------------------------------------*/
 var parameters = PluginManager.parameters('LeTBS');
-Lecode.S_TBS.allyColorCell = "#0FC50B"; //	():	Color of actors' cells.
-Lecode.S_TBS.enemyColorCell = "#C50B1B";
-Lecode.S_TBS.placementCellOpacity = 175;
 
-Lecode.S_TBS.hpTextColor = 2;
-Lecode.S_TBS.mpTextColor = 3;
+Lecode.S_TBS.allyColorCell = String(parameters["Ally Color Cell"] || "#0FC50B");    //  (): Color of actor cells.
+Lecode.S_TBS.enemyColorCell = String(parameters["Enemy Color Cell"] || "#C50B1B");  //  (): Color of enemy cells.
+Lecode.S_TBS.placementCellOpacity = Number(parameters["Cell Opacity Color"] || 175);    //  (Cell Opacity Color): Opacity of the placement cells.
+Lecode.S_TBS.placedBattlerAnim = Number(parameters["Placed Animation"] || 124); //  (Placed Animation): Animation ID when a battler is placed.
+// Divider: -- Misc --
+Lecode.S_TBS.explorationInput = String(parameters["Exploration Input"] || "shift"); //  (): Input to trigger exploration.
+Lecode.S_TBS.opacityInput = String(parameters["Opacity Input"] || "control");   //  (): Input to change windows' opacity.
+Lecode.S_TBS.minInputOpacity = Number(parameters["Min Input Opacity"] || 0);    //  (): Minimum opacity of windows.
+Lecode.S_TBS.inputOpacityDecreaseSteps = Number(parameters["Opacity Steps"] || 10); //  (Opacity Steps): Value of opacity to reduce when inputed.
+Lecode.S_TBS.battleStartSpriteDelay = Number(parameters["Battle Start Sprite Delay"] || 50);    //  (): Duration of the battle start sprite.
+Lecode.S_TBS.turnOrderFairRepartition = String(parameters["Turn Order Fair Repartition ?"] || 'true') === 'true';   //  (Turn Order Fair Repartition ?): Allow a fair repartition of the turn order ?
+Lecode.S_TBS.destinationDuration = Number(parameters["Destination Duration"] || 60);    //  (): Duration of the destination sprite (when a cell is selected).
+// Divider: -- Scopes --
+Lecode.S_TBS.scopeCellWidth = Number(parameters["Scope Cell Width"] || 46); //  (): Width of cells.
+Lecode.S_TBS.scopeCellHeight = Number(parameters["Scope Cell Height"] || 46);   //  (): Height of cells. 
+Lecode.S_TBS.obstacleRegionId = Number(parameters["Obstacle Region Id"] || 250);    //  (): Region ID for obstacles.
+// Divider: -- Move Action --
+Lecode.S_TBS.defaultMoveScope = String(parameters["Default Move Scope"] || "circle(_mp_)"); //  (): Default move scope data.
+Lecode.S_TBS.defaultMovePoints = Number(parameters["Default Move Points"] || 3);    //  (): Default amount of move points.
+Lecode.S_TBS.moveColorCell = String(parameters["Move Scope Color"] || "#0A5C85");   //  (Move Scope Color): Color of the move scope.
+Lecode.S_TBS.moveCellOpacity = Number(parameters["Move Scope Opacity"] || 175); //  (Move Scope Opacity): Opacity of the move scope.
+Lecode.S_TBS.moveInvalidCellOpacity = Number(parameters["Invalid Move Scope Opacity"] || 60);   //  (Invalid Move Scope Opacity): Opacity of the move scope when cells are invalid.
+Lecode.S_TBS.moveSelectedCellOpacity = Number(parameters["Selected Move Scope Opacity"] || 255);    //  (Selected Move Scope Opacity): Opacity of the move scope when cells are selected.
+Lecode.S_TBS.enableDirectionalFacing = String(parameters["Enable Directional Facing"] || 'true') === 'true';    //  (): Battlers will be allowed to change their direction.
+// Divider: -- Attack Action --
+Lecode.S_TBS.defaultAttackAnimation = Number(parameters["Default Attack Animation"] || 1);  //  (): Default attack animation.
+Lecode.S_TBS.defaultAttackSequence = String(parameters["Default Attack Sequence"] || "atk");    //  (): Default attack sequence.
+Lecode.S_TBS.defaultAttackScope = String(parameters["Default Attack Scope"] || "circle(1)");    //  (): Default attack scope data.
+Lecode.S_TBS.defaultAttackAoE = String(parameters["Default Attack Ao E"] || "circle(0)");   //  (): Default attack aoe data.
+Lecode.S_TBS.attackColorCell = String(parameters["Attack Scope Color"] || "#DF3A01");   //  (Attack Scope Color): Color of the attack scope.
+Lecode.S_TBS.attackCellOpacity = Number(parameters["Attack Scope Opacity"] || 175); //  (Attack Scope Opacity): Opacity of the attack scope.
+Lecode.S_TBS.attackInvalidCellOpacity = Number(parameters["Invalid Attack Scope Opacity"] || 60);   //  (Invalid Attack Scope Opacity): Opacity of the attack scope when cells are invalid.
+Lecode.S_TBS.attackSelectedCellOpacity = Number(parameters["Selected Attack Scope Opacity"] || 255);    //  (Selected Attack Scope Opacity): Opacity of the attack scope when cells are selected.
+// Divider: -- Skill Action --
+Lecode.S_TBS.defaultSkillSequence = String(parameters["Default Skill Sequence"] || "skill");    //  (): Default skill sequence.
+Lecode.S_TBS.defaultSkillScope = String(parameters["Default Skill Scope"] || "circle(3)");  //  (): Default skill scope data.
+Lecode.S_TBS.defaultSkillAoE = String(parameters["Default Skill Ao E"] || "circle(0)"); //  (): Default skill aoe data.
+Lecode.S_TBS.skillColorCell = String(parameters["Skill Scope Color"] || "#DF3A01"); //  (Skill Scope Color): Color of the skill scope.
+Lecode.S_TBS.skillCellOpacity = Number(parameters["Skill Scope Opacity"] || 175);   //  (Skill Scope Opacity): Opacity of the skill scope.
+Lecode.S_TBS.skillInvalidCellOpacity = Number(parameters["Invalid Skill Scope Opacity"] || 60); //  (Invalid Skill Scope Opacity): Opacity of the skill scope when cells are invalid.
+Lecode.S_TBS.skillSelectedCellOpacity = Number(parameters["Selected Skill Scope Opacity"] || 255);  //  (Selected Skill Scope Opacity): Opacity of the skill scope when cells are selected.
+// Divider: -- Item Action --
+Lecode.S_TBS.defaultItemSequence = String(parameters["Default Item Sequence"] || "item");   //  (): Default item sequence.
+Lecode.S_TBS.defaultItemScope = String(parameters["Default Item Scope"] || "circle(3)");    //  (): Default item scope data.
+Lecode.S_TBS.defaultItemAoE = String(parameters["Default Item Ao E"] || "circle(0)");   //  (): Default item aoe data.
+Lecode.S_TBS.ItemColorCell = String(parameters["Item Scope Color"] || "#DF01D7");   //  (Item Scope Color): Color of the item scope.
+Lecode.S_TBS.ItemCellOpacity = Number(parameters["Item Scope Opacity"] || 175); //  (Item Scope Opacity): Opacity of the item scope.
+Lecode.S_TBS.ItemInvalidCellOpacity = Number(parameters["Invalid Item Scope Opacity"] || 60);   //  (Invalid Item Scope Opacity): Opacity of the item scope when cells are invalid.
+Lecode.S_TBS.ItemSelectedCellOpacity = Number(parameters["Selected Item Scope Opacity"] || 255);    //  (Selected Item Scope Opacity): Opacity of the item scope when cells are selected.
+// Divider: -- Directional Damage --
+Lecode.S_TBS.backDirectionalDamageEffects = Number(parameters["Back Directional Damage Effects"] || 15);    //  (): Damage % when a battler is hit on the back.
+Lecode.S_TBS.sideDirectionalDamageEffects = Number(parameters["Side Directional Damage Effects"] || 0); //  (): Damage % when a battler is hit on the sides.
+Lecode.S_TBS.faceDirectionalDamageEffects = Number(parameters["Face Directional Damage Effects"] || -10);   //  (): Damage % when a battler is hit on the face.
+// Divider: -- Collision Damage --
+Lecode.S_TBS.defaultCollisionFormula = String(parameters["Default Collision Formula"] || "b.mhp * 0.05 * (distance-covered)");  //  (): Formula to evaluate collision damage.
+Lecode.S_TBS.collissionDamageChainRate = Number(parameters["Collission Damage Chain Rate"] || 0.3); //  (): Collision damage chain rate.
+// Divider: -- Motions --
+Lecode.S_TBS.battlersMoveSpeed = Number(parameters["Battlers Move Speed"] || 4);    //  (): Default move speed.
+Lecode.S_TBS.battlersFrameDelay = Number(parameters["Battlers Frame Delay"] || 10); //  (): Default delay value between sprites frames.
+// Divider: -- AI --
+Lecode.S_TBS.defaultAiPattern = String(parameters["Default Ai Pattern"] || "melee_fighter");    //  (): Default AI pattern.
+Lecode.S_TBS.aiWaitTime = Number(parameters["Ai Wait Time"] || 5);  //  (): AI wait time.
+// Divider: -- Actions Restrictions --
+Lecode.S_TBS.oneTimeMove = String(parameters["One Time Move"] || 'false') === 'true';   //  (): Enable the one time move feature. (See doc)
+Lecode.S_TBS.oneTimeOffense = String(parameters["One Time Offense"] || 'true') === 'true';  //  (): Enable the one time offense feature. (See doc)
+Lecode.S_TBS.autoPass = String(parameters["Auto Pass"] || 'true') === 'true';   //  (): Enable the auto pass feature. (See doc)
+// Divider: -- Battle End --
+Lecode.S_TBS.escapeSound = String(parameters["Escape Sound"] || "Buzzer2"); //  (): Sound when the party try to escape.
+Lecode.S_TBS.endOfBattleWait = Number(parameters["End Of Battle Wait"] || 60);  //  (): Wait amount before the end of the battle.
+Lecode.S_TBS.collapseAnimation = Number(parameters["Collapse Animation"] || 136);   //  (): Default collapse animation.
+
 
 Lecode.S_TBS.drawLimits = false;
-Lecode.S_TBS.placedBattlerAnim = 124; //	(Placed Animation):	Animation ID when a battler is placed.
-
-Lecode.S_TBS.explorationInput = "shift";
-Lecode.S_TBS.opacityInput = "control";
-Lecode.S_TBS.minInputOpacity = 0;
-Lecode.S_TBS.inputOpacityDecreaseSteps = 10;
-
-Lecode.S_TBS.battleStartSpriteDelay = 50;
-Lecode.S_TBS.turnOrderFairRepartition = true;
-
-Lecode.S_TBS.scopeCellWidth = 46;
-Lecode.S_TBS.scopeCellHeight = 46;
-Lecode.S_TBS.obstacleRegionId = 250;
-
-
-Lecode.S_TBS.defaultMoveScope = "circle(_mp_)";
-Lecode.S_TBS.defaultMovePoints = 3;
-Lecode.S_TBS.moveColorCell = "#0A5C85";
-Lecode.S_TBS.moveCellOpacity = 175;
-Lecode.S_TBS.moveInvalidCellOpacity = 60;
-Lecode.S_TBS.moveSelectedCellOpacity = 255;
-Lecode.S_TBS.enableDirectionalFacing = true;
-
-Lecode.S_TBS.defaultAttackAnimation = 1;
-Lecode.S_TBS.defaultAttackSequence = "atk";
-Lecode.S_TBS.defaultAttackScope = "circle(1)";
-Lecode.S_TBS.defaultAttackAoE = "circle(0)";
-Lecode.S_TBS.attackColorCell = "#DF3A01";
-Lecode.S_TBS.attackCellOpacity = 175;
-Lecode.S_TBS.attackInvalidCellOpacity = 60;
-Lecode.S_TBS.attackSelectedCellOpacity = 255;
-
-Lecode.S_TBS.defaultSkillSequence = "skill";
-Lecode.S_TBS.defaultSkillScope = "circle(3)";
-Lecode.S_TBS.defaultSkillAoE = "circle(0)";
-Lecode.S_TBS.skillColorCell = "#DF3A01";
-Lecode.S_TBS.skillCellOpacity = 175;
-Lecode.S_TBS.skillInvalidCellOpacity = 60;
-Lecode.S_TBS.skillSelectedCellOpacity = 255;
-
-Lecode.S_TBS.defaultItemSequence = "item";
-Lecode.S_TBS.defaultItemScope = "circle(3)";
-Lecode.S_TBS.defaultItemAoE = "circle(0)";
-Lecode.S_TBS.ItemColorCell = "#DF01D7";
-Lecode.S_TBS.ItemCellOpacity = 175;
-Lecode.S_TBS.ItemInvalidCellOpacity = 60;
-Lecode.S_TBS.ItemSelectedCellOpacity = 255;
-
-Lecode.S_TBS.backDirectionalDamageEffects = 15;
-Lecode.S_TBS.sideDirectionalDamageEffects = 0;
-Lecode.S_TBS.faceDirectionalDamageEffects = -10;
-
-Lecode.S_TBS.defaultCollisionFormula = "b.mhp * 0.05 * (distance-covered)";
-Lecode.S_TBS.collissionDamageChainRate = 0.3;
-
-Lecode.S_TBS.battlersMoveSpeed = 4;
-Lecode.S_TBS.battlersFrameDelay = 10;
-
-Lecode.S_TBS.defaultAiPattern = "melee_fighter";
-Lecode.S_TBS.aiWaitTime = 5;
-
-Lecode.S_TBS.oneTimeMove = false;
-Lecode.S_TBS.oneTimeOffense = true;
-Lecode.S_TBS.autoPass = true;
-
-Lecode.S_TBS.destinationDuration = 60;
-
-Lecode.S_TBS.escapeSound = "Buzzer2";
-Lecode.S_TBS.endOfBattleWait = 60;
-Lecode.S_TBS.collapseAnimation = 136;
-
-
 
 /*-------------------------------------------------------------------------
 * Spriteset_BattleTBS
@@ -4431,7 +4704,7 @@ TBSSequenceManager.prototype.commandMoveStraight = function(param) {
     var targets = this.readTargets(targetData);
 
     targets.forEach(function(target) {
-        target.forceMoveStraight(nbr);
+        target.forceMoveStraight(nbr,false);
     }.bind(this));
     this._waitRequested = true;
 };
@@ -5305,7 +5578,7 @@ TBSEntity.prototype.processMovement = function(path) {
     this._moveUpdateDir = true;
 };
 
-TBSEntity.prototype.forceMoveStraight = function(nbrCells) {
+TBSEntity.prototype.forceMoveStraight = function(nbrCells,checkCollision) {
     this._movePath = [];
     var cx = this._cellX;
     var cy = this._cellY;
@@ -5338,6 +5611,7 @@ TBSEntity.prototype.forceMoveStraight = function(nbrCells) {
                 break;
         }
     }
+    if (!checkCollision) this._collisionData = null;
     if (this._movePath.length === 0) return;
     this._moving = true;
     this._movingStraight = true;
@@ -5352,13 +5626,13 @@ TBSEntity.prototype.forcePush = function(user, sourceCell, distance, obj, damage
     distance += user.getKnockbackBonus() - this.getKnockbackReduction();
     var old = this.getDir();
     this.lookAway(sourceCell);
-    this.forceMoveStraight(distance);
+    this.forceMoveStraight(distance, damage);
     this.setDir(old);
     this._moveUpdateDir = false;
-    this._collisionData.user = user;
-    this._collisionData.obj = obj;
-    if (!damage)
-        this._collisionData = null;
+    if (this._collisionData) {
+        this._collisionData.user = user;
+        this._collisionData.obj = obj;
+    }
 
     if (this._movePath.length === 0 && this._collisionData)
         BattleManagerTBS.processCollisionEffects(this);
@@ -5367,13 +5641,13 @@ TBSEntity.prototype.forcePush = function(user, sourceCell, distance, obj, damage
 TBSEntity.prototype.forcePull = function(user, sourceCell, distance, obj, damage) {
     var old = this.getDir();
     this.lookAt(sourceCell);
-    this.forceMoveStraight(distance);
+    this.forceMoveStraight(distance, damage);
     this.setDir(old);
     this._moveUpdateDir = false;
-    this._collisionData.user = user;
-    this._collisionData.obj = obj;
-    if (!damage)
-        this._collisionData = null;
+    if (this._collisionData) {
+        this._collisionData.user = user;
+        this._collisionData.obj = obj;
+    }
 
     if (this._movePath.length === 0 && this._collisionData)
         BattleManagerTBS.processCollisionEffects(this);

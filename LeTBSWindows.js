@@ -7,7 +7,9 @@
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
-# Same terms as the main plugin
+# This plugin is under the MIT License.
+# (http://choosealicense.com/licenses/mit/)
+# In addition, you should keep this header.
 #-----------------------------------------------------------------------------
 # Version History
 #-----------------------------------------------------------------------------
@@ -18,7 +20,7 @@ var Lecode = Lecode || {};
 if (!Lecode.S_TBS)
     throw new Error("LeTBSWindows must be below LeTBS");
 /*:
- * @plugindesc Version A Windows for Lecodes'TBS
+ * @plugindesc (WIP)Version A Windows for LeTBS
  * @author Lecode
  * @version 1.0
  *
@@ -34,6 +36,9 @@ if (!Lecode.S_TBS)
 var parameters = PluginManager.parameters('LeTBSWindows');
 
 Lecode.S_TBS.placementWindowFloatRange = 20;
+
+Lecode.S_TBS.hpTextColor = 2;                   //  (): Color code of HP
+Lecode.S_TBS.mpTextColor = 3;                   //  (): Color code of MP
 
 Lecode.S_TBS.statusWindowW = "240";
 Lecode.S_TBS.statusWindowH = "window.fittingHeight(3);";
