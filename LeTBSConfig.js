@@ -225,6 +225,13 @@ Lecode.S_TBS.Config.Custom_Scopes = {
 
     "fire_ball": {
         data: "[cx,cy+1],[cx-1,cy+2],[cx,cy+2],[cx+1,cy+2],[cx-2,cy+3],[cx-1,cy+3],[cx,cy+3],[cx+1,cy+3],[cx+2,cy+3],[cx-3,cy+4],[cx-2,cy+4],[cx-1,cy+4],[cx,cy+4],[cx+1,cy+4],[cx+2,cy+4],[cx+3,cy+4],[cx-4,cy+5],[cx-3,cy+5],[cx-2,cy+5],[cx-1,cy+5],[cx,cy+5],[cx+1,cy+5],[cx+2,cy+5],[cx+3,cy+5],[cx+4,cy+5],[cx-5,cy+6],[cx-4,cy+6],[cx-3,cy+6],[cx-2,cy+6],[cx-1,cy+6],[cx,cy+6],[cx+1,cy+6],[cx+2,cy+6],[cx+3,cy+6],[cx+4,cy+6],[cx+5,cy+6]"
+    },
+
+    "ice_fury": {
+        data_right: "[cx,cy],[cx+1,cy],[cx+2,cy]",
+        data_left: "[cx-2,cy],[cx-1,cy],[cx,cy]",
+        data_up: "[cx,cy-2],[cx,cy-1],[cx,cy]",
+        data_down: "[cx,cy],[cx,cy+1],[cx,cy+2]"
     }
 
 };
@@ -425,6 +432,18 @@ Lecode.S_TBS.Config.Sequences = {
         "call: post-skill"
     ],
 
+    "walking_fire": [
+        "call: pre-skill",
+        "call_for_every_cell: walking_fire_dmg, aoe, close->far",
+        "call: post-skill"
+    ],
+
+    "walking_fire_dmg": [
+        "map_anim: saved(every_cell), obj_anim",
+        "map_effects: saved(every_cell), current_obj, obj_anim",
+        "wait: 30"
+    ],
+
 
     //-
 
@@ -569,16 +588,16 @@ Lecode.S_TBS.Config.AI = {
         "pass: look_closest_enemy",
         "wait: 30",
         "if: canUseOffense()",
-        	"script: console.log('Ok')",
+        "script: console.log('Ok')",
         "endif",
     ],
 
     "attack": [
         "wait: 5",
         "if: canUseOffense()",
-        	"call_behavior: use_offense",
+        "call_behavior: use_offense",
         "else",
-        	"call_behavior: cant_use_offense",
+        "call_behavior: cant_use_offense",
         "endif",
         "wait: 5",
         "pass: look_closest_enemy"
@@ -586,45 +605,45 @@ Lecode.S_TBS.Config.AI = {
 
     "use_offense": [
         "if: chance(70)",
-        	"search_target: lowest_enemy, 100%",
-        	"if: !isTargetValid()",
-        		"search_target: closest_enemy, 100%",
-        	"endif",
+        "search_target: lowest_enemy, 100%",
+        "if: !isTargetValid()",
+        "search_target: closest_enemy, 100%",
+        "endif",
         "else",
-        	"search_target: closest_enemy, 100%",
+        "search_target: closest_enemy, 100%",
         "endif",
         "if: isTargetValid()",
-        	"set_action: damage, average",
-        	"if: !battlerInRange('defined_target','defined_action')",
-        		"move_for_action: null",
-        	"endif",
-        	"use: defined_action",
-        	"call_behavior: after_offense",
+        "set_action: damage, average",
+        "if: !battlerInRange('defined_target','defined_action')",
+        "move_for_action: null",
+        "endif",
+        "use: defined_action",
+        "call_behavior: after_offense",
         "else",
-        	"move: toward_enemies, 100%",
+        "move: toward_enemies, 100%",
         "endif"
     ],
 
     "cant_use_offense": [
         //"script: console.log('cant use offense')",
         "if: failureCode() === 'out_of_range'",
-        	"if: chance(40)",
-        		"move: toward_enemies, 80%",
-        	"else",
-        		"move: toward_enemies, 100%",
-        	"endif",
+        "if: chance(40)",
+        "move: toward_enemies, 80%",
         "else",
-        	"move: away_enemies, 100%",
+        "move: toward_enemies, 100%",
+        "endif",
+        "else",
+        "move: away_enemies, 100%",
         "endif"
     ],
 
     "after_offense": [
         "if: pattern('ranged_fighter')",
-        	"move: away_enemies, 100%",
+        "move: away_enemies, 100%",
         "else",
-        	"if: !isInMeleeWith('defined_target')",
-        		"move: away_enemies, 50%",
-        	"endif",
+        "if: !isInMeleeWith('defined_target')",
+        "move: away_enemies, 50%",
+        "endif",
         "endif"
     ]
 };
