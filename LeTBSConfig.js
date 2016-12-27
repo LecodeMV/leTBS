@@ -263,6 +263,10 @@ Lecode.S_TBS.Config.Sequences = {
         "play_pose: user, dead, dead",
     ],
 
+    "revived": [
+        "play_pose: user, idle, idle",
+    ],
+
     "damaged": [
         "sprite_shake: user, 6, 30",
         "play_pose: user, hit",

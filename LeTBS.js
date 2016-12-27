@@ -45,13 +45,28 @@
 #         Fixed and added some sequence commands
 #         Fixed some bugs
 #         Created DamagePopupEX
-# - 0.6 : Added these sequence commands: call_for_every_cell, call_for_every_entity
-#         Added these sequence commands: save_cells, save_entities
+# - 0.6 : Added these sequence commands: 'call_for_every_cell', 'call_for_every_entity'
+#         Added these sequence commands: 'save_cells', 'save_entities'
 #         Support directional scope
 #         Added a new scope type: path
-#         Added an option to instanciate all enemies at the same time
+#         Added an option to instantiate all enemies at the same time
+#         Map events are now supported - battlers can interact with them.
+#         Added some plugin command for in-battle eventing
+#         Added some event tag for in-battle eventing
+#         Fixed a bug where the system freezes on positioning phase
+#         Fixed the "param is not defined" error when an enemy starts its turn
 #         Fixed a bug where custom scopes ignore line of sight
 #         Fixed parallax scrolling when the cursor move
+#         Fixed a bug where move points could be negative
+#         Fixed a bug where knockback distance could be negative
+#         The entities layer has now a correct Z coordinate
+#         Fixed a bug where entities overlap themselves
+#         Dead enemies don't try to play their turn anymore
+#         Dead actors can't be placed at the start of battles
+#         Battlers are correctly revived
+#         The turn order visual is correctly updated when en entity is revived
+#         The parameter 'false' in the sequence commands 'push' and 'pull' to avoid 
+#         knockback damage now works as intended
 #         Selected cells with TouchInput on large map are correctly handled
 #=============================================================================
 */
@@ -80,10 +95,6 @@ Lecode.S_TBS = {};
  * @param Placed Animation
  * @desc Animation ID when a battler is placed.
  * @default 124
- *
- * @param Instanciate All ?
- * @desc Place all enemies at the same time
- * @default false
  *
  * @param -- Misc --
  * @desc ...
@@ -364,7 +375,7 @@ Lecode.S_TBS.allyColorCell = String(parameters["Ally Color Cell"] || "#0FC50B");
 Lecode.S_TBS.enemyColorCell = String(parameters["Enemy Color Cell"] || "#C50B1B"); //  (): Color of enemy cells.
 Lecode.S_TBS.placementCellOpacity = Number(parameters["Cell Opacity Color"] || 175); //  (Cell Opacity Color): Opacity of the placement cells.
 Lecode.S_TBS.placedBattlerAnim = Number(parameters["Placed Animation"] || 124); //  (Placed Animation): Animation ID when a battler is placed.
-Lecode.S_TBS.instanciateAll = String(parameters["Instanciate All"] || "false") === true; //  (Instanciate All): Instanciate all enemies at the same time.
+Lecode.S_TBS.instantiateAll = true; //  (instantiate All): instantiate all enemies at the same time.
 // Divider: -- Misc --
 Lecode.S_TBS.explorationInput = String(parameters["Exploration Input"] || "shift"); //  (): Input to trigger exploration.
 Lecode.S_TBS.opacityInput = String(parameters["Opacity Input"] || "control"); //  (): Input to change windows' opacity.
@@ -377,6 +388,7 @@ Lecode.S_TBS.destinationDuration = Number(parameters["Destination Duration"] || 
 Lecode.S_TBS.scopeCellWidth = Number(parameters["Scope Cell Width"] || 46); //  (): Width of cells.
 Lecode.S_TBS.scopeCellHeight = Number(parameters["Scope Cell Height"] || 46); //  (): Height of cells. 
 Lecode.S_TBS.obstacleRegionId = Number(parameters["Obstacle Region Id"] || 250); //  (): Region ID for obstacles.
+Lecode.S_TBS.freeObstacleRegionId = 249; //  (): Region ID for non-blocking los obstacles.
 // Divider: -- Move Action --
 Lecode.S_TBS.defaultMoveScope = String(parameters["Default Move Scope"] || "circle(_mp_)"); //  (): Default move scope data.
 Lecode.S_TBS.defaultMovePoints = Number(parameters["Default Move Points"] || 3); //  (): Default amount of move points.
@@ -453,7 +465,7 @@ Spriteset_BattleTBS.prototype.initialize = function () {
 Spriteset_BattleTBS.prototype.createCharacters = function () {
     this._characterSprites = [];
     $gameMap.events().forEach(function (event) {
-        if (event.event().note.match(/tbs_event/i))
+        if (event.event().note.match(/<TBS Event>/i) || event.event().note.match(/<TBS Neutral (.+)>/i))
             this._characterSprites.push(new Sprite_Character(event));
     }, this);
 
@@ -463,32 +475,32 @@ Spriteset_BattleTBS.prototype.createCharacters = function () {
 };
 
 Spriteset_BattleTBS.prototype.createBattleLayers = function () {
+    //-Scopes
+    this._scopesLayer = new TBSScopeLayer();
+    this._scopesLayer.z = 0;
+    this._tilemap.addChild(this._scopesLayer);
+    this._scopesLayer.createSelectionLayer();
     //-Ground entities
     this._groundEntitiesLayer = new Sprite();
     this._groundEntitiesLayer.z = 0;
     this._tilemap.addChild(this._groundEntitiesLayer);
-    //-Scopes
-    this._scopesLayer = new TBSScopeLayer();
-    this._scopesLayer.z = 2;
-    this._tilemap.addChild(this._scopesLayer);
-    this._scopesLayer.createSelectionLayer();
     //-Ground
     this._groundLayer = new Sprite();
     this._groundLayer.z = 2;
     this._tilemap.addChild(this._groundLayer);
     //-Battlers
     this._battlersLayer = new Sprite();
-    this._battlersLayer.z = 2;
+    this._battlersLayer.z = 4;
     this._tilemap.addChild(this._battlersLayer);
     //-Animations
     this._animationsLayer = new TBSMapAnimation();
     this._animationsLayer.z = 4;
     this._tilemap.addChild(this._animationsLayer);
-    //-Movable Infos
+    //-Movable Info
     this._movableInfoLayer = new Sprite();
     this._movableInfoLayer.z = 6;
     this._tilemap.addChild(this._movableInfoLayer);
-    //-Fixed Infos
+    //-Fixed Info
     this._fixedInfoLayer = new Sprite();
     this._fixedInfoLayer.z = 6;
     this._tilemap.addChild(this._fixedInfoLayer);
@@ -497,6 +509,22 @@ Spriteset_BattleTBS.prototype.createBattleLayers = function () {
     this._debugLayer = new Sprite(bitmap);
     this._debugLayer.z = 7;
     this._tilemap.addChild(this._debugLayer);
+};
+
+Spriteset_BattleTBS.prototype.update = function () {
+    Spriteset_Map.prototype.update.call(this);
+    this.updateEntitiesZ();
+};
+
+Spriteset_BattleTBS.prototype.updateEntitiesZ = function () {
+    if (this._battlersLayer)
+        this._battlersLayer.children.sort(this.compareEntitiesOrder);
+};
+
+Spriteset_BattleTBS.prototype.compareEntitiesOrder = function (a, b) {
+    if (a.y < b.y) return -1;
+    if (a.y > b.y) return 1;
+    return 0;
 };
 
 
@@ -693,7 +721,7 @@ Scene_Battle.prototype.start = function () {
 Lecode.S_TBS.oldSB_update = Scene_Battle.prototype.update;
 Scene_Battle.prototype.update = function () {
     if (Lecode.S_TBS.commandOn) {
-        $gameMap.update();
+        $gameMap.update(true);
         $gameTimer.update(true);
         $gameScreen.update();
         InputHandlerTBS.update();
@@ -1182,6 +1210,10 @@ BattleManagerTBS.initMembers = function () {
     this._activeCell = null;
     this._spriteset = null;
     this._battlerEntities = [];
+    this._neutralEntities = [];
+    this._tbsEvents = [];
+    this._lastTriggeredEventEntity = null;
+    this._lastTriggeredEventBattler = null;
     this._explorationIniCell = null;
     this._exploring = false;
     this._inputOpacity = 0;
@@ -1255,6 +1287,8 @@ BattleManagerTBS.prepare = function () {
     this.createStartCells();
     this.createGroundCells();
     this.createTBSObjects();
+    this.createTBSEvents();
+    this.createNeutralEntities();
 };
 
 BattleManagerTBS.createTBSObjects = function () {
@@ -1324,8 +1358,30 @@ BattleManagerTBS.createGroundCells = function () {
     }
 };
 
+BattleManagerTBS.createTBSEvents = function () {
+    $gameMap.events().forEach(function (event) {
+        if (event.event().note.match(/<TBS Event>/i) || event.event().note.match(/<TBS Neutral (.+)>/i)) {
+            this._tbsEvents.push(new TBSEvent(event));
+        }
+    }.bind(this));
+};
+
+BattleManagerTBS.getTBSEventAt = function (x, y) {
+    for (var i = 0; i < this._tbsEvents.length; i++) {
+        var event = this._tbsEvents[i];
+        if (event.x() === x && event.y() === y)
+            return event;
+    }
+    return null;
+};
+
+BattleManagerTBS.createNeutralEntities = function () {
+
+};
+
 BattleManagerTBS.update = function () {
     this.waitForMessages();
+    this.waitForEvents();
     this.updateWait();
     this.updateWindowsInputOpacity();
     this.updateTBSObjects();
@@ -1362,6 +1418,11 @@ BattleManagerTBS.waitForMessages = function () {
             this._windowToResume = null;
         }
     }
+};
+
+BattleManagerTBS.waitForEvents = function () {
+    if ($gameMap.isEventRunning())
+        this.wait(1);
 };
 
 BattleManagerTBS.updateWait = function () {
@@ -1459,38 +1520,17 @@ BattleManagerTBS.createPlacementCell = function (type, x, y, cell) {
     cell._type = type;
 };
 
-BattleManagerTBS.drawTileLimits = function (cell, x, y) {
-    if (!Lecode.S_TBS.drawLimits) return false;
-    var lines = 0;
-    if ($gameMap.isPassable(x, y, 2)) { //-Down
-        cell._bitmap.fillRect(0, 0, $gameMap.tileWidth(), 1, "#FFFFFF");
-        lines++;
-    }
-    if ($gameMap.isPassable(x, y, 4)) { //-Left
-        cell._bitmap.fillRect($gameMap.tileWidth() - 1, 0, 1, $gameMap.tileHeight(), "#FFFFFF");
-        lines++;
-    }
-    if ($gameMap.isPassable(x, y, 6)) { //-Right
-        cell._bitmap.fillRect(0, 0, 1, $gameMap.tileHeight(), "#FFFFFF");
-        lines++;
-    }
-    if ($gameMap.isPassable(x, y, 8)) { //-Up
-        cell._bitmap.fillRect(0, $gameMap.tileHeight() - 1, $gameMap.tileWidth(), 1, "#FFFFFF");
-        lines++;
-    }
-    return lines;
-};
-
 BattleManagerTBS.processPlacementPhase = function () {
     this._phase = "placement";
     this._subPhase = "";
-    this._placeAllies = [];
-    this._placeEnemies = [];
+    this._actorsToPlace = [];
+    this._enemiesToPlace = [];
     $gameParty.battleMembers().forEach(function (mem) {
-        this._placeAllies.push(mem);
+        if (!mem.isDead())
+            this._actorsToPlace.push(mem);
     }.bind(this));
     $gameTroop.members().forEach(function (mem) {
-        this._placeEnemies.push(mem);
+        this._enemiesToPlace.push(mem);
     }.bind(this));
     this.processEnemyPlacement();
 
@@ -1584,8 +1624,8 @@ BattleManagerTBS.placementPhaseOnInputUp = function () {
 BattleManagerTBS.updatePlacementPhase = function () {
     if (this._subPhase === "troop") {
         if (!this.getLayer("animations").isAnimationPlaying()) {
-            if (this._placeEnemies.length === 0)
-                this.processAllyPlacement();
+            if (this._enemiesToPlace.length === 0)
+                this.processActorsPlacement();
             else
                 this.placeNextEnemy();
         }
@@ -1594,8 +1634,8 @@ BattleManagerTBS.updatePlacementPhase = function () {
 
 BattleManagerTBS.processEnemyPlacement = function () {
     this._subPhase = "troop";
-    if (Lecode.S_TBS.instanciateAll) {
-        while (this._placeEnemies.length > 0)
+    if (Lecode.S_TBS.instantiateAll) {
+        while (this._enemiesToPlace.length > 0)
             this.placeNextEnemy();
     } else {
         this.placeNextEnemy();
@@ -1603,7 +1643,7 @@ BattleManagerTBS.processEnemyPlacement = function () {
 };
 
 BattleManagerTBS.placeNextEnemy = function () {
-    var enemy = this._placeEnemies.shift();
+    var enemy = this._enemiesToPlace.shift();
     var cells = this.enemyStartCells().filter(function (c) {
         return Number(c._event.note) === enemy.index() + 1 && this.isCellFree(c);
     }.bind(this));
@@ -1619,7 +1659,7 @@ BattleManagerTBS.placeNextEnemy = function () {
     }
 };
 
-BattleManagerTBS.processAllyPlacement = function () {
+BattleManagerTBS.processActorsPlacement = function () {
     InputHandlerTBS.setActive(true);
     this._subPhase = "input";
     this.placementSelect(this.allyStartCells()[0]);
@@ -1629,7 +1669,7 @@ BattleManagerTBS.placementSelect = function (cell) {
     cell.select();
     this.centerActiveCell();
     this.updateCursor();
-    var battler = this._placeAllies[0];
+    var battler = this._actorsToPlace[0];
     LeUtilities.getScene().showPlacementWindow(cell, battler);
 };
 
@@ -1693,12 +1733,13 @@ BattleManagerTBS.selectNextStartCell = function () {
     var currentEntity = cell.getEntity();
     var index = currentIndex;
     do {
-        if (currentIndex === this.allyStartCells().length - 1)
+        if (index === this.allyStartCells().length - 1)
             index = 0;
         else
-            index += 1;
+            index++;
         cell = this.allyStartCells()[index];
         currentEntity = cell.getEntity();
+        console.log("No: ", index);
     } while (currentEntity);
     this.placementSelect(cell);
     SoundManager.playCursor();
@@ -1713,7 +1754,7 @@ BattleManagerTBS.selectPreviousStartCell = function () {
 
 BattleManagerTBS.placementPhaseOk = function () {
     var cell = this._activeCell;
-    var battler = this._placeAllies.shift();
+    var battler = this._actorsToPlace.shift();
     var currentEntity = cell.getEntity();
     if (currentEntity) {
         this.removeBattlerEntity(currentEntity);
@@ -1744,7 +1785,7 @@ BattleManagerTBS.placeBattler = function (battler, cell) {
 };
 
 BattleManagerTBS.removeBattlerEntity = function (entity) {
-    this._placeAllies.unshift(entity._battler);
+    this._actorsToPlace.unshift(entity._battler);
     LeUtilities.removeInArray(this.allEntities(), entity);
     this.getLayer("battlers").removeChild(entity._sprite);
 };
@@ -2108,7 +2149,10 @@ BattleManagerTBS.startTurn = function () {
         LeUtilities.getScene().showCommandWindow();
     } else {
         this._subPhase = "ai";
-        this._aiManager.process(entity);
+        if (battler.isDead())
+            this.processCommandPass();
+        else
+            this._aiManager.process(entity);
     }
 };
 
@@ -2805,6 +2849,10 @@ BattleManagerTBS.onEntityDeath = function (entity) {
     this._turnOrderVisual.updateOnEntityDeath(this._turnOrder, this._activeIndex);
 };
 
+BattleManagerTBS.onEntityRevive = function (entity) {
+    this._turnOrderVisual.updateOnEntityRevive(this._turnOrder, this._activeIndex);
+};
+
 
 
 BattleManagerTBS.drawActionScope = function (entity, data) {
@@ -2814,7 +2862,7 @@ BattleManagerTBS.drawActionScope = function (entity, data) {
     var invalidOpa = this._actionScopeParam.invalidOpa;
     var param = this.makeObjScopeParam(null, entity, center);
     var scope = this.getScopeFromData(data, center, param);
-    var invalidCondition = "!cell._scopeVisible || (cell.isObstacle() && !cell.isThereEntity())";
+    var invalidCondition = "!cell._scopeVisible || (cell.isObstacleForLOS() && !cell.isThereEntity())";
     this.getLayer("scopes").clear();
     this.drawScope(scope, color, opacity, invalidOpa, invalidCondition);
     this._actionScope = {};
@@ -2861,7 +2909,6 @@ BattleManagerTBS.cursorOnActionScope = function () {
         var cell = this.actionScope().cells[i];
         if (cell._scopeVisible && !(cell.isObstacle() && !cell.isThereEntity())) {
             if (cell.x == this.cursor().cellX && cell.y == this.cursor().cellY) {
-                console.log("Visible: ", cell.x, " ", cell.y);
                 return true;
             }
         }
@@ -3124,7 +3171,7 @@ BattleManagerTBS.checkScopeVisibility = function (cells, center) {
     for (var x = boundaries.left; x <= boundaries.right; x++) {
         for (var y = boundaries.top; y <= boundaries.bottom; y++) {
             var cell = this.getCellAt(x, y);
-            if (cell.isObstacle())
+            if (cell.isObstacleForLOS())
                 obstacles.push(cell);
         }
     }
@@ -3183,7 +3230,7 @@ BattleManagerTBS.checkSingleCellVisibility = function (cell, center) {
 
     var obstacles = [];
     for (var i = 0; i < this._groundCells.length; i++) {
-        if (this._groundCells[i].isObstacle())
+        if (this._groundCells[i].isObstacleForLOS())
             obstacles.push(this._groundCells[i]);
     }
     cell._scopeVisible = true;
@@ -3442,6 +3489,28 @@ BattleManagerTBS.resetDirectionalDamageBonus = function (targets) {
     }
 };
 
+BattleManagerTBS.checkEventsTriggerByTouch = function (entity) {
+    var cell = entity.getForwardCell();
+    var event = this.getTBSEventAt(cell.x, cell.y);
+    if (event && event.canTriggerByTouch()) {
+        event.start();
+        this._lastTriggeredEventEntity = entity;
+        this._lastTriggeredEventBattler = entity.battler();
+    }
+};
+
+BattleManagerTBS.checkEventsTriggerByStep = function (entity) {
+    var cell = entity.getCell();
+    var event = this.getTBSEventAt(cell.x, cell.y);
+    if (event && event.canTriggerByStep()) {
+        event.start();
+        this._lastTriggeredEventEntity = entity;
+        this._lastTriggeredEventBattler = entity.battler();
+        return event._stopWhenStepped;
+    }
+    return false;
+};
+
 
 BattleManagerTBS.allyStartCells = function () {
     return this._startCells.filter(function (cell) {
@@ -3509,7 +3578,7 @@ BattleManagerTBS.getEntityByBattler = function (battler) {
 };
 
 BattleManagerTBS.canEndPlacementPhase = function () {
-    return this._placeAllies.length === 0;
+    return this._actorsToPlace.length === 0;
 };
 
 BattleManagerTBS.centerActiveCell = function () {
@@ -4741,7 +4810,7 @@ TBSSequenceManager.prototype.commandPush = function (param) {
     var targetData = param[0];
     var targetData2 = param[1];
     var distance = Number(param[2]);
-    var damage = !param[3] || param[3] === "false";
+    var damage = !(!param[3] || param[3] === "false");
     var targets = this.readTargets(targetData);
     var sourceCell = this.readCellTargets(targetData2)[0];
 
@@ -4755,7 +4824,7 @@ TBSSequenceManager.prototype.commandPull = function (param) {
     var targetData = param[0];
     var targetData2 = param[1];
     var distance = Number(param[2]);
-    var damage = !param[3] || param[3] === "false";
+    var damage = !(!param[3] || param[3] === "false");
     var targets = this.readTargets(targetData);
     var sourceCell = this.readCellTargets(targetData2)[0];
 
@@ -5075,7 +5144,6 @@ TBSSequenceManager.prototype.readCellTargets = function (data) {
     } else if (data.match(/last_cell_targets/i)) {
         targets = this._lastCellTargets;
     } else if (data.match(/saved\((.+)\)/i)) {
-        console.log("Saved(", RegExp.$1, "): ", this._savedCells[RegExp.$1]);
         targets = this._savedCells[RegExp.$1] || [];
     } else if (data.match(/aoe/i)) {
         targets = BattleManagerTBS._actionAoE;
@@ -5352,8 +5420,18 @@ TBSCell.prototype.isImpassableTile = function () {
 };
 
 TBSCell.prototype.isObstacle = function () {
+    if (this._regionId === Lecode.S_TBS.obstacleRegionId) return true;
+    if (this._regionId === Lecode.S_TBS.freeObstacleRegionId) return true;
     if (this.isThereEntity()) return true;
-    if (this._regionId == Lecode.S_TBS.obstacleRegionId) return true;
+    var tbsEvent = BattleManagerTBS.getTBSEventAt(this.x, this.y);
+    if (tbsEvent && tbsEvent.isObstacle()) return true;
+    return false;
+};
+
+TBSCell.prototype.isObstacleForLOS = function () {
+    if (this.isThereEntity()) return true;
+    var tbsEvent = BattleManagerTBS.getTBSEventAt(this.x, this.y);
+    if (tbsEvent && tbsEvent.isObstacleForLOS()) return true;
     return false;
 };
 
@@ -5585,11 +5663,11 @@ TBSEntity.prototype.update = function () {
 };
 
 TBSEntity.prototype.checkDeath = function () {
-    if (this._battler.isDead() && !this._dead) {
+    if (this._battler.isDead() && !this._dead)
         this.onDeath();
-    } else {
+    if (!this._battler.isDead() && this._dead)
         this.onRevive();
-    }
+
 };
 
 TBSEntity.prototype.onBattleStart = function () {
@@ -5619,7 +5697,9 @@ TBSEntity.prototype.onDeath = function () {
 };
 
 TBSEntity.prototype.onRevive = function () {
-
+    this._dead = false;
+    this.appendSequence("revived");
+    BattleManagerTBS.onEntityRevive(this);
 };
 
 TBSEntity.prototype.lookAt = function (cell) {
@@ -5703,6 +5783,7 @@ TBSEntity.prototype.processMovement = function (path) {
 };
 
 TBSEntity.prototype.forceMoveStraight = function (nbrCells, checkCollision) {
+    if (nbrCells <= 0) return;
     this._movePath = [];
     var cx = this._cellX;
     var cy = this._cellY;
@@ -5763,6 +5844,8 @@ TBSEntity.prototype.forcePush = function (user, sourceCell, distance, obj, damag
 };
 
 TBSEntity.prototype.forcePull = function (user, sourceCell, distance, obj, damage) {
+    if (this.isImmuneToKnockback())
+        return;
     var old = this.getDir();
     this.lookAt(sourceCell);
     this.forceMoveStraight(distance, damage);
@@ -5813,6 +5896,7 @@ TBSEntity.prototype.updateMove = function () {
 };
 
 TBSEntity.prototype.onCellCovered = function () {
+    var stop = BattleManagerTBS.checkEventsTriggerByStep(this);
     // When returning true, the movement is stoped
     this._movingNextCell = null;
     if (this._moveReducePoints) {
@@ -5820,7 +5904,7 @@ TBSEntity.prototype.onCellCovered = function () {
         if (this.getMovePoints() === 0)
             return true;
     }
-    return false;
+    return stop;
 };
 
 TBSEntity.prototype.moveForward = function (cell) {
@@ -5860,6 +5944,7 @@ TBSEntity.prototype.onMoveEnd = function () {
         BattleManagerTBS.processCollisionEffects(this);
     this._collisionData = null;
     this._movingStraight = false;
+    BattleManagerTBS.checkEventsTriggerByTouch(this);
 };
 
 TBSEntity.prototype.teleport = function (cell) {
@@ -5886,6 +5971,8 @@ TBSEntity.prototype.setMovePoints = function () {
                 this._movePoints += equip.leTbs_movePointsPlus;
         }.bind(this));
     }
+    if (this._movePoints < 0)
+        this._movePoints = 0;
 };
 
 TBSEntity.prototype.changeMovePoints = function (plus) {
@@ -6449,6 +6536,70 @@ TBSEntity_Sprite.prototype.filenameID = function (battler) {
     return battler.originalName();
 };
 
+
+/*-------------------------------------------------------------------------
+* TBSEvent
+-------------------------------------------------------------------------*/
+function TBSEvent() {
+    this.initialize.apply(this, arguments);
+}
+
+TBSEvent.prototype.initialize = function (event) {
+    this._event = event;
+    this._triggerType = null;
+    this._obstacleForLOS = true;
+    this._stopWhenStepped = false;
+    this.setupFlags();
+};
+
+TBSEvent.prototype.setupFlags = function () {
+    for (var i = 0; i < this._event.list().length; i++) {
+        var command = this._event.list()[i];
+        if (command && command.code == 108) {
+            var comments = command.parameters;
+            for (var j = 0; j < comments.length; j++) {
+                var comment = comments[j];
+                if (comment.match(/<LeTBS>\s?Trigger_Type\s?:\s?(.+)/i)) {
+                    this._triggerType = String(RegExp.$1).toLowerCase();
+                } else if (comment.match(/<LeTBS>\s?Free_LOS/i)) {
+                    this._obstacleForLOS = true;
+                } else if (comment.match(/<LeTBS>\s?Stop_On_Step/i)) {
+                    this._stopWhenStepped = true;
+                }
+            }
+        }
+    }
+};
+
+TBSEvent.prototype.start = function () {
+    this._event.start();
+};
+
+TBSEvent.prototype.x = function () {
+    return this._event.x;
+};
+
+TBSEvent.prototype.y = function () {
+    return this._event.y;
+};
+
+TBSEvent.prototype.isObstacle = function () {
+    return !this._event.isThrough() && this._event.isNormalPriority();
+};
+
+TBSEvent.prototype.isObstacleForLOS = function () {
+    return !!this._obstacleForLOS;
+};
+
+TBSEvent.prototype.canTriggerByTouch = function () {
+    return this._triggerType === "touch";
+};
+
+TBSEvent.prototype.canTriggerByStep = function () {
+    return this._triggerType === "step_on";
+};
+
+
 /*-------------------------------------------------------------------------
 * TBSDirectionSelector
 -------------------------------------------------------------------------*/
@@ -6595,9 +6746,35 @@ Game_Interpreter.prototype.pluginCommand = function (command, args) {
             case 'OFF':
                 Lecode.S_TBS.commandOn = false;
                 break;
+            case "Center":
+                if (args[1].match(/\((\d+)\,(\d+)\)/i)) {
+                    var x = Number(RegExp.$1);
+                    var y = Number(RegExp.$2);
+                    var cell = BattleManagerTBS.getCellAt(x, y);
+                    if (cell) {
+                        BattleManagerTBS.centerCell(cell);
+                    }
+                }
+                break;
+            case "Wait":
+                var value = Number(args[1]);
+                BattleManagerTBS.wait(value);
         }
     }
 };
+
+
+/*-------------------------------------------------------------------------
+* Game_Interpreter
+-------------------------------------------------------------------------*/
+Lecode.S_TBS.oldGameInterpreter_character = Game_Interpreter.prototype.character;
+Game_Interpreter.prototype.character = function (param) {
+    if (Lecode.S_TBS.commandOn && $gameParty.inBattle()) {
+        return $gameMap.event(param > 0 ? param : this._eventId);
+    }
+    return Lecode.S_TBS.oldGameInterpreter_character.call(this, param);
+};
+
 
 /*-------------------------------------------------------------------------
 * DataManager
