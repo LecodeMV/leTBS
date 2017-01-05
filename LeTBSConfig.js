@@ -101,6 +101,16 @@ Lecode.S_TBS.Config.Tile_Effects = {
         }
     },
 
+    53: {
+        "entering": {
+            skill_effects: 53,
+            play_anim: true,
+            aoe: "circle(1)",
+            stop_movement: true,
+            wait: 40
+        }
+    }
+
 };
 
 /*-------------------------------------------------------------------------
@@ -259,8 +269,9 @@ Lecode.S_TBS.Config.Sequences = {
 
     "dead": [
         "anim: user, collapse_anim",
-        "perform_collapse: user",
         "play_pose: user, dead, dead",
+        "wait: 40",
+        "perform_collapse: user"
     ],
 
     "revived": [

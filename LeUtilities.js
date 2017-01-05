@@ -749,7 +749,6 @@ LeUtilities.directionCodeToText = function (dirCode) {
     return "";
 };
 
-
 /*
  * object.watch polyfill
  *
