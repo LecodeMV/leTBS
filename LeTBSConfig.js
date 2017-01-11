@@ -52,8 +52,8 @@ Lecode.S_TBS.Config.Battler_Sprites = {
 
     "Evil Statue": [
         ["idle", "_idle", 1, 0],
-        ["cast", "_cast", 4, 0],
-        ["atk", "_cast", 4, 0],
+        ["cast", "_cast", 3, 0],
+        ["atk", "_cast", 3, 0],
         ["dead", "_dead", 1, 0]
     ]
 
@@ -100,6 +100,16 @@ Lecode.S_TBS.Config.Tile_Effects = {
             wait: 40
         }
     },
+
+    53: {
+        "entering": {
+            skill_effects: 53,
+            play_anim: true,
+            aoe: "circle(1)",
+            stop_movement: true,
+            wait: 40
+        }
+    }
 
 };
 
@@ -161,6 +171,32 @@ Lecode.S_TBS.Config.Marks = {
         duration: [100, "turn_end"]
     },
 
+    "crystal_mark": {
+        body_anim: 157,
+        disappearing_anim: 158,
+        size: "square(2)",
+        triggers: {
+            "stepping": {
+                stop_movement: false,
+                skill_effects: 45,
+                effects_aoe: "circle(0)"
+            }
+        }
+    },
+
+    "anti_crystal_mark": {
+        body_anim: 160,
+        disappearing_anim: 161,
+        size: "square(2)",
+        triggers: {
+            "stepping": {
+                stop_movement: false,
+                skill_effects: 47,
+                effects_aoe: "circle(0)"
+            }
+        }
+    },
+
 };
 
 /*-------------------------------------------------------------------------
@@ -198,11 +234,25 @@ Lecode.S_TBS.Config.Projectiles = {
     },
 
     "fire_ball": {
-        anim: [147, 36, 16],
+        anim: [147, 45, 38],
         adapt_angle: true,
         speed: 9,
         jump: 0
-    }
+    },
+
+    "fire_arrow": {
+        anim: [152, 36, 16],
+        adapt_angle: true,
+        speed: 9,
+        jump: 0
+    },
+
+    "phantom_slash": {
+        anim: [149, 56, 50],
+        adapt_angle: true,
+        speed: 9,
+        jump: 0
+    },
 
 };
 
@@ -225,6 +275,20 @@ Lecode.S_TBS.Config.Custom_Scopes = {
 
     "fire_ball": {
         data: "[cx,cy+1],[cx-1,cy+2],[cx,cy+2],[cx+1,cy+2],[cx-2,cy+3],[cx-1,cy+3],[cx,cy+3],[cx+1,cy+3],[cx+2,cy+3],[cx-3,cy+4],[cx-2,cy+4],[cx-1,cy+4],[cx,cy+4],[cx+1,cy+4],[cx+2,cy+4],[cx+3,cy+4],[cx-4,cy+5],[cx-3,cy+5],[cx-2,cy+5],[cx-1,cy+5],[cx,cy+5],[cx+1,cy+5],[cx+2,cy+5],[cx+3,cy+5],[cx+4,cy+5],[cx-5,cy+6],[cx-4,cy+6],[cx-3,cy+6],[cx-2,cy+6],[cx-1,cy+6],[cx,cy+6],[cx+1,cy+6],[cx+2,cy+6],[cx+3,cy+6],[cx+4,cy+6],[cx+5,cy+6]"
+    },
+
+    "ice_fury": {
+        data_right: "[cx,cy],[cx+1,cy],[cx+2,cy]",
+        data_left: "[cx-2,cy],[cx-1,cy],[cx,cy]",
+        data_up: "[cx,cy-2],[cx,cy-1],[cx,cy]",
+        data_down: "[cx,cy],[cx,cy+1],[cx,cy+2]"
+    },
+
+    "fire_arrows": {
+        data_right: "[cx+2,cy-2],[cx+1,cy-1],[cx+2,cy-1],[cx,cy],[cx+1,cy],[cx+2,cy],[cx+1,cy+1],[cx+2,cy+1],[cx+2,cy+2]",
+        data_left: "[cx-2,cy-2],[cx-2,cy-1],[cx-1,cy-1],[cx-2,cy],[cx-1,cy],[cx,cy],[cx-2,cy+1],[cx-1,cy+1],[cx-2,cy+2]",
+        data_up: "[cx-2,cy-2],[cx-1,cy-2],[cx,cy-2],[cx+1,cy-2],[cx+2,cy-2],[cx-1,cy-1],[cx,cy-1],[cx+1,cy-1],[cx,cy]",
+        data_down: "[cx,cy],[cx-1,cy+1],[cx,cy+1],[cx+1,cy+1],[cx-2,cy+2],[cx-1,cy+2],[cx,cy+2],[cx+1,cy+2],[cx+2,cy+2]"
     }
 
 };
@@ -252,8 +316,13 @@ Lecode.S_TBS.Config.Sequences = {
 
     "dead": [
         "anim: user, collapse_anim",
-        "perform_collapse: user",
         "play_pose: user, dead, dead",
+        "wait: 40",
+        "perform_collapse: user"
+    ],
+
+    "revived": [
+        "play_pose: user, idle, idle",
     ],
 
     "damaged": [
@@ -317,11 +386,33 @@ Lecode.S_TBS.Config.Sequences = {
         "call: post-skill"
     ],
 
+    "map_skill": [
+        "call: pre-skill",
+        "map_effects: aoe, current_obj, obj_anim, 0, true",
+        "call: post-skill"
+    ],
+
     "item": [
         "play_pose: user, item",
         "wait: 10",
         "effects: aoe_all_battlers, current_obj, obj_anim",
         "wait: 60"
+    ],
+
+    "skill_neutral": [
+        "play_pose: user, cast",
+        "wait: 15",
+        "effects: aoe_all_battlers, current_obj, obj_anim, 0, true",
+        "play_pose: user, idle",
+        "wait: 20"
+    ],
+
+    "map_skill_neutral": [
+        "play_pose: user, cast",
+        "wait: 15",
+        "map_effects: aoe, current_obj, obj_anim, 0, true",
+        "play_pose: user, idle",
+        "wait: 20"
     ],
 
     "bow": [
@@ -370,6 +461,22 @@ Lecode.S_TBS.Config.Sequences = {
         "wait: 20",
         "play_pose: user, idle",
         "wait: 10"
+    ],
+
+    "phantom_slash": [
+        "play_pose: user, atk",
+        "wait: 10",
+        "projectile: phantom_slash, user_cell, cursor_cell",
+        "effects: aoe_all_battlers, current_obj, 153",
+        "anim: user, 154",
+        "wait: 20",
+        "reach_target: user, aoe_all_battlers, back, true",
+        "anim: user, 155",
+        "look_at: user, aoe_all_battlers",
+        "play_pose: user, atk",
+        "wait: 10",
+        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "wait: 60"
     ],
 
     //-
@@ -423,6 +530,18 @@ Lecode.S_TBS.Config.Sequences = {
         "mark: volcano_cell, aoe",
         "wait: 60",
         "call: post-skill"
+    ],
+
+    "walking_fire": [
+        "call: pre-skill",
+        "call_for_every_cell: walking_fire_dmg, aoe, close->far",
+        "call: post-skill"
+    ],
+
+    "walking_fire_dmg": [
+        "map_anim: saved(every_cell), obj_anim",
+        "map_effects: saved(every_cell), current_obj, obj_anim",
+        "wait: 30"
     ],
 
 
@@ -494,6 +613,17 @@ Lecode.S_TBS.Config.Sequences = {
         "call: post-skill"
     ],
 
+    "fire_arrows": [
+        "call: pre-skill",
+        "call_for_every_entity: fire_arrow_dmg, aoe",
+        "call: post-skill"
+    ],
+
+    "fire_arrow_dmg": [
+        "projectile: fire_arrow, user_cell, saved(every_entity)",
+        "effects: saved(every_entity), current_obj, obj_anim"
+    ],
+
     //-
 
     "fire_ball": [
@@ -502,6 +632,18 @@ Lecode.S_TBS.Config.Sequences = {
         "effects: aoe_all_battlers, current_obj, obj_anim",
         "wait: 60",
         "call: post-skill"
+    ],
+
+    "crystal_mark": [
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 20",
+        "mark: crystal_mark, cursor_cell"
+    ],
+
+    "anti_crystal_mark": [
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 20",
+        "mark: anti_crystal_mark, cursor_cell"
     ],
 
     //-
@@ -528,7 +670,8 @@ Lecode.S_TBS.Config.Sequences = {
         "wait: 5",
         "end_delegated_call:",
         "delegate_call: rush_sup_action, last_battler_targets"
-    ]
+    ],
+    
 
 };
 
@@ -569,16 +712,16 @@ Lecode.S_TBS.Config.AI = {
         "pass: look_closest_enemy",
         "wait: 30",
         "if: canUseOffense()",
-        	"script: console.log('Ok')",
+            "script: console.log('Ok')",
         "endif",
     ],
 
     "attack": [
         "wait: 5",
         "if: canUseOffense()",
-        	"call_behavior: use_offense",
+            "call_behavior: use_offense",
         "else",
-        	"call_behavior: cant_use_offense",
+            "call_behavior: cant_use_offense",
         "endif",
         "wait: 5",
         "pass: look_closest_enemy"
@@ -586,45 +729,45 @@ Lecode.S_TBS.Config.AI = {
 
     "use_offense": [
         "if: chance(70)",
-        	"search_target: lowest_enemy, 100%",
-        	"if: !isTargetValid()",
-        		"search_target: closest_enemy, 100%",
-        	"endif",
+            "search_target: lowest_enemy, 100%",
+            "if: !isTargetValid()",
+                "search_target: closest_enemy, 100%",
+            "endif",
         "else",
-        	"search_target: closest_enemy, 100%",
+            "search_target: closest_enemy, 100%",
         "endif",
         "if: isTargetValid()",
-        	"set_action: damage, average",
-        	"if: !battlerInRange('defined_target','defined_action')",
-        		"move_for_action: null",
-        	"endif",
-        	"use: defined_action",
-        	"call_behavior: after_offense",
+            "set_action: damage, average",
+            "if: !battlerInRange('defined_target','defined_action')",
+                "move_for_action: null",
+            "endif",
+            "use: defined_action",
+            "call_behavior: after_offense",
         "else",
-        	"move: toward_enemies, 100%",
+            "move: toward_enemies, 100%",
         "endif"
     ],
 
     "cant_use_offense": [
         //"script: console.log('cant use offense')",
         "if: failureCode() === 'out_of_range'",
-        	"if: chance(40)",
-        		"move: toward_enemies, 80%",
-        	"else",
-        		"move: toward_enemies, 100%",
-        	"endif",
+            "if: chance(40)",
+                "move: toward_enemies, 80%",
+            "else",
+                "move: toward_enemies, 100%",
+            "endif",
         "else",
-        	"move: away_enemies, 100%",
+            "move: away_enemies, 100%",
         "endif"
     ],
 
     "after_offense": [
         "if: pattern('ranged_fighter')",
-        	"move: away_enemies, 100%",
+            "move: away_enemies, 100%",
         "else",
-        	"if: !isInMeleeWith('defined_target')",
-        		"move: away_enemies, 50%",
-        	"endif",
+            "if: !isInMeleeWith('defined_target')",
+            "move: away_enemies, 50%",
+            "endif",
         "endif"
     ]
 };
