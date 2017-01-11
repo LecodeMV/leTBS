@@ -143,7 +143,6 @@ Scene_Battle.prototype.hideWinConditionsWindow = function(sprite) {
 };
 
 
-
 /*-------------------------------------------------------------------------
 * Window_TBSWinConditions
 -------------------------------------------------------------------------*/
@@ -332,83 +331,21 @@ LeTBSWinCds.checkDefeat = function() {
     return false;
 };
 
-LeTBSWinCds.prepareEntityFlags = function() {
-    this._startupFlags = {};
-    $gameMap.events().forEach(function(event) {
-        for (var i = 0; i < event.list().length; i++) {
-            var command = event.list()[i];
-            if (command && command.code == 108) {
-                var comments = command.parameters;
-                for (var j = 0; j < comments.length; j++) {
-                    var comment = comments[j];
-                    if (comment.match(/<LeTBS>\s?WinCds_Flag\s?:\s?(.+)/i)) {
-                        this._startupFlags[event.x] = {};
-                        this._startupFlags[event.x][event.y] = RegExp.$1;
-                    }
-                }
-            }
-        }
-    }.bind(this));
-};
-
-LeTBSWinCds.setEntityFlag = function(entity) {
-    var cell = entity.getCell();
-    if (this._startupFlags[cell.x]) {
-        entity._winCdsFlag = this._startupFlags[cell.x][cell.y];
-    }
-};
-
 LeTBSWinCds.setFlag = function(flagId, on) {
     this._flags[flagId] = on;
+    BattleManagerTBS.checkDefeatAndVictory();
 };
 
 
 /*-------------------------------------------------------------------------
 * BattleManagerTBS
 -------------------------------------------------------------------------*/
-Lecode.S_TBS.WinConditions.oldBattleManagerTBS_prepare = BattleManagerTBS.prepare;
-BattleManagerTBS.prepare = function() {
-    LeTBSWinCds.prepareEntityFlags();
-    Lecode.S_TBS.WinConditions.oldBattleManagerTBS_prepare.call(this);
-};
-
 BattleManagerTBS.canPrepareDefeat = function() {
     return $gameParty.isAllDead() || LeTBSWinCds.checkDefeat();
 };
 
 BattleManagerTBS.canPrepareVictory = function() {
     return LeTBSWinCds.checkVictory();
-};
-
-BattleManagerTBS.getEntitiesWithEnemyId = function(enemyId) {
-    var result = [];
-    var entities = this.enemyEntities();
-    for (var i = 0; i < entities.length; i++) {
-        var entity = entities[i];
-        if (entity.battler().enemyId() === enemyId)
-            result.push(entity);
-    }
-    return result;
-};
-
-BattleManagerTBS.getEntityWithActorId = function(actorId) {
-    var entities = this.allyEntities();
-    for (var i = 0; i < entities.length; i++) {
-        var entity = entities[i];
-        if (entity.battler().actorId() === actorId)
-            return entity;
-    }
-    return null;
-};
-
-BattleManagerTBS.getFlaggedEntity = function(flagId) {
-    var entities = this.allEntities();
-    for (var i = 0; i < entities.length; i++) {
-        var entity = entities[i];
-        if (entity._winCdsFlag === flagId)
-            return entity;
-    }
-    return null;
 };
 
 Lecode.S_TBS.WinConditions.oldBattleManagerTBS_battleBeginning = BattleManagerTBS.battleBeginning;
@@ -421,22 +358,4 @@ Lecode.S_TBS.WinConditions.oldBattleManagerTBS_beginningPhaseEnd = BattleManager
 BattleManagerTBS.beginningPhaseEnd = function() {
     Lecode.S_TBS.WinConditions.oldBattleManagerTBS_beginningPhaseEnd.call(this);
     LeUtilities.getScene().hideWinConditionsWindow();
-};
-
-
-/*-------------------------------------------------------------------------
-* TBSEntity
--------------------------------------------------------------------------*/
-Lecode.S_TBS.WinConditions.oldTBSEntity_initialize = TBSEntity.prototype.initialize;
-TBSEntity.prototype.initialize = function(battler, layer) {
-    Lecode.S_TBS.WinConditions.oldTBSEntity_initialize.call(this, battler, layer);
-    this._winCdsFlag = null;
-};
-
-Lecode.S_TBS.WinConditions.oldTBSEntity_setCell = TBSEvent.prototype.setCell;
-TBSEvent.prototype.setCell = function(cell) {
-    if (!this._cell) { //- Set for the first time
-        LeTBSWinCds.setEntityFlag(this);
-    }
-    Lecode.S_TBS.WinConditions.oldTBSEntity_setCell.call(this);
 };
