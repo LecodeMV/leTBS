@@ -3,7 +3,7 @@
 # Lecode's Tactical Battle System
 # LeTBS.js
 # By Lecode
-# Version 0.6
+# Version 0.61
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
@@ -81,6 +81,8 @@
 #           knockback damage now works as intended
 #         Fixed 2 bugs related to the mark and tile effect add-on and improved it (1.1)
 #         Selected cells with TouchInput on large map are correctly handled
+# - 0.61 : Optimized cells locating
+#          Added a trigger type for battle end
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -91,7 +93,7 @@ Lecode.S_TBS = {};
 /*:
  * @plugindesc A tactical battle system with awesome features
  * @author Lecode
- * @version 0.5
+ * @version 0.61
 *
 * @param Ally Color Cell
 * @desc Color of actor cells.
@@ -396,79 +398,79 @@ Lecode.S_TBS = {};
 -------------------------------------------------------------------------*/
 var parameters = PluginManager.parameters('LeTBS');
 
-Lecode.S_TBS.allyColorCell = String(parameters["Ally Color Cell"] || "#0FC50B") ;	//	(): Color of actor cells.
-Lecode.S_TBS.enemyColorCell = String(parameters["Enemy Color Cell"] || "#C50B1B") ;	//	(): Color of enemy cells.
-Lecode.S_TBS.placementCellOpacity = Number(parameters["Cell Opacity Color"] || 175) ;	//	(Cell Opacity Color): Opacity of the placement cells.
-Lecode.S_TBS.placedBattlerAnim = Number(parameters["Placed Animation"] || 124) ;	//	(Placed Animation): Animation ID when a battler is placed.
+Lecode.S_TBS.allyColorCell = String(parameters["Ally Color Cell"] || "#0FC50B");	//	(): Color of actor cells.
+Lecode.S_TBS.enemyColorCell = String(parameters["Enemy Color Cell"] || "#C50B1B");	//	(): Color of enemy cells.
+Lecode.S_TBS.placementCellOpacity = Number(parameters["Cell Opacity Color"] || 175);	//	(Cell Opacity Color): Opacity of the placement cells.
+Lecode.S_TBS.placedBattlerAnim = Number(parameters["Placed Animation"] || 124);	//	(Placed Animation): Animation ID when a battler is placed.
 Lecode.S_TBS.instantiateAll = String(parameters["Instantiate All"] || 'true') === 'true';	//	(): Instantiate all enemies at the same time.
 Lecode.S_TBS.displayStartMessages = String(parameters["Display Start Messages"] || 'false') === 'true';	//	(): Show start messages ?
 // Divider: -- Misc --
-Lecode.S_TBS.explorationInput = String(parameters["Exploration Input"] || "shift") ;	//	(): Input to trigger exploration.
-Lecode.S_TBS.opacityInput = String(parameters["Opacity Input"] || "control") ;	//	(): Input to change windows' opacity.
-Lecode.S_TBS.minInputOpacity = Number(parameters["Min Input Opacity"] || 0) ;	//	(): Minimum opacity of windows.
-Lecode.S_TBS.inputOpacityDecreaseSteps = Number(parameters["Opacity Steps"] || 10) ;	//	(Opacity Steps): Value of opacity to reduce when inputed.
-Lecode.S_TBS.battleStartSpriteDelay = Number(parameters["Battle Start Sprite Delay"] || 50) ;	//	(): Duration of the battle start sprite.
-Lecode.S_TBS.turnOrderFairRepartition = String(parameters["Turn Order Fair Repartition ?"] || 'true') === 'true' ;	//	(Turn Order Fair Repartition ?): Allow a fair repartition of the turn order ?
-Lecode.S_TBS.destinationDuration = Number(parameters["Destination Duration"] || 60) ;	//	(): Duration of the destination sprite (when a cell is selected).
+Lecode.S_TBS.explorationInput = String(parameters["Exploration Input"] || "shift");	//	(): Input to trigger exploration.
+Lecode.S_TBS.opacityInput = String(parameters["Opacity Input"] || "control");	//	(): Input to change windows' opacity.
+Lecode.S_TBS.minInputOpacity = Number(parameters["Min Input Opacity"] || 0);	//	(): Minimum opacity of windows.
+Lecode.S_TBS.inputOpacityDecreaseSteps = Number(parameters["Opacity Steps"] || 10);	//	(Opacity Steps): Value of opacity to reduce when inputed.
+Lecode.S_TBS.battleStartSpriteDelay = Number(parameters["Battle Start Sprite Delay"] || 50);	//	(): Duration of the battle start sprite.
+Lecode.S_TBS.turnOrderFairRepartition = String(parameters["Turn Order Fair Repartition ?"] || 'true') === 'true';	//	(Turn Order Fair Repartition ?): Allow a fair repartition of the turn order ?
+Lecode.S_TBS.destinationDuration = Number(parameters["Destination Duration"] || 60);	//	(): Duration of the destination sprite (when a cell is selected).
 // Divider: -- Scopes --
-Lecode.S_TBS.scopeCellWidth = Number(parameters["Scope Cell Width"] || 46) ;	//	(): Width of cells.
-Lecode.S_TBS.scopeCellHeight = Number(parameters["Scope Cell Height"] || 46) ;	//	(): Height of cells. 
-Lecode.S_TBS.obstacleRegionId = Number(parameters["Obstacle Region Id"] || 250) ;	//	(): Region ID for obstacles.
+Lecode.S_TBS.scopeCellWidth = Number(parameters["Scope Cell Width"] || 46);	//	(): Width of cells.
+Lecode.S_TBS.scopeCellHeight = Number(parameters["Scope Cell Height"] || 46);	//	(): Height of cells. 
+Lecode.S_TBS.obstacleRegionId = Number(parameters["Obstacle Region Id"] || 250);	//	(): Region ID for obstacles.
 Lecode.S_TBS.freeObstacleRegionId = Number(parameters["Free Obstacle Region Id"] || 249);	//	(): Region ID for non-blocking los obstacles.
 // Divider: -- Move Action --
-Lecode.S_TBS.defaultMoveScope = String(parameters["Default Move Scope"] || "circle(_mp_)") ;	//	(): Default move scope data.
-Lecode.S_TBS.defaultMovePoints = Number(parameters["Default Move Points"] || 3) ;	//	(): Default amount of move points.
-Lecode.S_TBS.moveColorCell = String(parameters["Move Scope Color"] || "#0A5C85") ;	//	(Move Scope Color): Color of the move scope.
-Lecode.S_TBS.moveCellOpacity = Number(parameters["Move Scope Opacity"] || 175) ;	//	(Move Scope Opacity): Opacity of the move scope.
-Lecode.S_TBS.moveInvalidCellOpacity = Number(parameters["Invalid Move Scope Opacity"] || 60) ;	//	(Invalid Move Scope Opacity): Opacity of the move scope when cells are invalid.
-Lecode.S_TBS.moveSelectedCellOpacity = Number(parameters["Selected Move Scope Opacity"] || 255) ;	//	(Selected Move Scope Opacity): Opacity of the move scope when cells are selected.
-Lecode.S_TBS.enableDirectionalFacing = String(parameters["Enable Directional Facing"] || 'true') === 'true' ;	//	(): Battlers will be allowed to change their direction.
+Lecode.S_TBS.defaultMoveScope = String(parameters["Default Move Scope"] || "circle(_mp_)");	//	(): Default move scope data.
+Lecode.S_TBS.defaultMovePoints = Number(parameters["Default Move Points"] || 3);	//	(): Default amount of move points.
+Lecode.S_TBS.moveColorCell = String(parameters["Move Scope Color"] || "#0A5C85");	//	(Move Scope Color): Color of the move scope.
+Lecode.S_TBS.moveCellOpacity = Number(parameters["Move Scope Opacity"] || 175);	//	(Move Scope Opacity): Opacity of the move scope.
+Lecode.S_TBS.moveInvalidCellOpacity = Number(parameters["Invalid Move Scope Opacity"] || 60);	//	(Invalid Move Scope Opacity): Opacity of the move scope when cells are invalid.
+Lecode.S_TBS.moveSelectedCellOpacity = Number(parameters["Selected Move Scope Opacity"] || 255);	//	(Selected Move Scope Opacity): Opacity of the move scope when cells are selected.
+Lecode.S_TBS.enableDirectionalFacing = String(parameters["Enable Directional Facing"] || 'true') === 'true';	//	(): Battlers will be allowed to change their direction.
 // Divider: -- Attack Action --
-Lecode.S_TBS.defaultAttackAnimation = Number(parameters["Default Attack Animation"] || 1) ;	//	(): Default attack animation.
-Lecode.S_TBS.defaultAttackSequence = String(parameters["Default Attack Sequence"] || "atk") ;	//	(): Default attack sequence.
-Lecode.S_TBS.defaultAttackScope = String(parameters["Default Attack Scope"] || "circle(1)") ;	//	(): Default attack scope data.
-Lecode.S_TBS.defaultAttackAoE = String(parameters["Default Attack Ao E"] || "circle(0)") ;	//	(): Default attack aoe data.
-Lecode.S_TBS.attackColorCell = String(parameters["Attack Scope Color"] || "#DF3A01") ;	//	(Attack Scope Color): Color of the attack scope.
-Lecode.S_TBS.attackCellOpacity = Number(parameters["Attack Scope Opacity"] || 175) ;	//	(Attack Scope Opacity): Opacity of the attack scope.
-Lecode.S_TBS.attackInvalidCellOpacity = Number(parameters["Invalid Attack Scope Opacity"] || 60) ;	//	(Invalid Attack Scope Opacity): Opacity of the attack scope when cells are invalid.
-Lecode.S_TBS.attackSelectedCellOpacity = Number(parameters["Selected Attack Scope Opacity"] || 255) ;	//	(Selected Attack Scope Opacity): Opacity of the attack scope when cells are selected.
+Lecode.S_TBS.defaultAttackAnimation = Number(parameters["Default Attack Animation"] || 1);	//	(): Default attack animation.
+Lecode.S_TBS.defaultAttackSequence = String(parameters["Default Attack Sequence"] || "atk");	//	(): Default attack sequence.
+Lecode.S_TBS.defaultAttackScope = String(parameters["Default Attack Scope"] || "circle(1)");	//	(): Default attack scope data.
+Lecode.S_TBS.defaultAttackAoE = String(parameters["Default Attack Ao E"] || "circle(0)");	//	(): Default attack aoe data.
+Lecode.S_TBS.attackColorCell = String(parameters["Attack Scope Color"] || "#DF3A01");	//	(Attack Scope Color): Color of the attack scope.
+Lecode.S_TBS.attackCellOpacity = Number(parameters["Attack Scope Opacity"] || 175);	//	(Attack Scope Opacity): Opacity of the attack scope.
+Lecode.S_TBS.attackInvalidCellOpacity = Number(parameters["Invalid Attack Scope Opacity"] || 60);	//	(Invalid Attack Scope Opacity): Opacity of the attack scope when cells are invalid.
+Lecode.S_TBS.attackSelectedCellOpacity = Number(parameters["Selected Attack Scope Opacity"] || 255);	//	(Selected Attack Scope Opacity): Opacity of the attack scope when cells are selected.
 // Divider: -- Skill Action --
-Lecode.S_TBS.defaultSkillSequence = String(parameters["Default Skill Sequence"] || "skill") ;	//	(): Default skill sequence.
-Lecode.S_TBS.defaultSkillScope = String(parameters["Default Skill Scope"] || "circle(3)") ;	//	(): Default skill scope data.
-Lecode.S_TBS.defaultSkillAoE = String(parameters["Default Skill Ao E"] || "circle(0)") ;	//	(): Default skill aoe data.
-Lecode.S_TBS.skillColorCell = String(parameters["Skill Scope Color"] || "#DF3A01") ;	//	(Skill Scope Color): Color of the skill scope.
-Lecode.S_TBS.skillCellOpacity = Number(parameters["Skill Scope Opacity"] || 175) ;	//	(Skill Scope Opacity): Opacity of the skill scope.
-Lecode.S_TBS.skillInvalidCellOpacity = Number(parameters["Invalid Skill Scope Opacity"] || 60) ;	//	(Invalid Skill Scope Opacity): Opacity of the skill scope when cells are invalid.
-Lecode.S_TBS.skillSelectedCellOpacity = Number(parameters["Selected Skill Scope Opacity"] || 255) ;	//	(Selected Skill Scope Opacity): Opacity of the skill scope when cells are selected.
+Lecode.S_TBS.defaultSkillSequence = String(parameters["Default Skill Sequence"] || "skill");	//	(): Default skill sequence.
+Lecode.S_TBS.defaultSkillScope = String(parameters["Default Skill Scope"] || "circle(3)");	//	(): Default skill scope data.
+Lecode.S_TBS.defaultSkillAoE = String(parameters["Default Skill Ao E"] || "circle(0)");	//	(): Default skill aoe data.
+Lecode.S_TBS.skillColorCell = String(parameters["Skill Scope Color"] || "#DF3A01");	//	(Skill Scope Color): Color of the skill scope.
+Lecode.S_TBS.skillCellOpacity = Number(parameters["Skill Scope Opacity"] || 175);	//	(Skill Scope Opacity): Opacity of the skill scope.
+Lecode.S_TBS.skillInvalidCellOpacity = Number(parameters["Invalid Skill Scope Opacity"] || 60);	//	(Invalid Skill Scope Opacity): Opacity of the skill scope when cells are invalid.
+Lecode.S_TBS.skillSelectedCellOpacity = Number(parameters["Selected Skill Scope Opacity"] || 255);	//	(Selected Skill Scope Opacity): Opacity of the skill scope when cells are selected.
 // Divider: -- Item Action --
-Lecode.S_TBS.defaultItemSequence = String(parameters["Default Item Sequence"] || "item") ;	//	(): Default item sequence.
-Lecode.S_TBS.defaultItemScope = String(parameters["Default Item Scope"] || "circle(3)") ;	//	(): Default item scope data.
-Lecode.S_TBS.defaultItemAoE = String(parameters["Default Item Ao E"] || "circle(0)") ;	//	(): Default item aoe data.
-Lecode.S_TBS.ItemColorCell = String(parameters["Item Scope Color"] || "#DF01D7") ;	//	(Item Scope Color): Color of the item scope.
-Lecode.S_TBS.ItemCellOpacity = Number(parameters["Item Scope Opacity"] || 175) ;	//	(Item Scope Opacity): Opacity of the item scope.
-Lecode.S_TBS.ItemInvalidCellOpacity = Number(parameters["Invalid Item Scope Opacity"] || 60) ;	//	(Invalid Item Scope Opacity): Opacity of the item scope when cells are invalid.
-Lecode.S_TBS.ItemSelectedCellOpacity = Number(parameters["Selected Item Scope Opacity"] || 255) ;	//	(Selected Item Scope Opacity): Opacity of the item scope when cells are selected.
+Lecode.S_TBS.defaultItemSequence = String(parameters["Default Item Sequence"] || "item");	//	(): Default item sequence.
+Lecode.S_TBS.defaultItemScope = String(parameters["Default Item Scope"] || "circle(3)");	//	(): Default item scope data.
+Lecode.S_TBS.defaultItemAoE = String(parameters["Default Item Ao E"] || "circle(0)");	//	(): Default item aoe data.
+Lecode.S_TBS.ItemColorCell = String(parameters["Item Scope Color"] || "#DF01D7");	//	(Item Scope Color): Color of the item scope.
+Lecode.S_TBS.ItemCellOpacity = Number(parameters["Item Scope Opacity"] || 175);	//	(Item Scope Opacity): Opacity of the item scope.
+Lecode.S_TBS.ItemInvalidCellOpacity = Number(parameters["Invalid Item Scope Opacity"] || 60);	//	(Invalid Item Scope Opacity): Opacity of the item scope when cells are invalid.
+Lecode.S_TBS.ItemSelectedCellOpacity = Number(parameters["Selected Item Scope Opacity"] || 255);	//	(Selected Item Scope Opacity): Opacity of the item scope when cells are selected.
 // Divider: -- Directional Damage --
-Lecode.S_TBS.backDirectionalDamageEffects = Number(parameters["Back Directional Damage Effects"] || 15) ;	//	(): Damage % when a battler is hit on the back.
-Lecode.S_TBS.sideDirectionalDamageEffects = Number(parameters["Side Directional Damage Effects"] || 0) ;	//	(): Damage % when a battler is hit on the sides.
-Lecode.S_TBS.faceDirectionalDamageEffects = Number(parameters["Face Directional Damage Effects"] || -10) ;	//	(): Damage % when a battler is hit on the face.
+Lecode.S_TBS.backDirectionalDamageEffects = Number(parameters["Back Directional Damage Effects"] || 15);	//	(): Damage % when a battler is hit on the back.
+Lecode.S_TBS.sideDirectionalDamageEffects = Number(parameters["Side Directional Damage Effects"] || 0);	//	(): Damage % when a battler is hit on the sides.
+Lecode.S_TBS.faceDirectionalDamageEffects = Number(parameters["Face Directional Damage Effects"] || -10);	//	(): Damage % when a battler is hit on the face.
 // Divider: -- Collision Damage --
-Lecode.S_TBS.defaultCollisionFormula = String(parameters["Default Collision Formula"] || "b.mhp * 0.05 * (distance-covered)") ;	//	(): Formula to evaluate collision damage.
-Lecode.S_TBS.collissionDamageChainRate = Number(parameters["Collission Damage Chain Rate"] || 0.3) ;	//	(): Collision damage chain rate.
+Lecode.S_TBS.defaultCollisionFormula = String(parameters["Default Collision Formula"] || "b.mhp * 0.05 * (distance-covered)");	//	(): Formula to evaluate collision damage.
+Lecode.S_TBS.collissionDamageChainRate = Number(parameters["Collission Damage Chain Rate"] || 0.3);	//	(): Collision damage chain rate.
 // Divider: -- Motions --
-Lecode.S_TBS.battlersMoveSpeed = Number(parameters["Battlers Move Speed"] || 4) ;	//	(): Default move speed.
-Lecode.S_TBS.battlersFrameDelay = Number(parameters["Battlers Frame Delay"] || 10) ;	//	(): Default delay value between sprites frames.
+Lecode.S_TBS.battlersMoveSpeed = Number(parameters["Battlers Move Speed"] || 4);	//	(): Default move speed.
+Lecode.S_TBS.battlersFrameDelay = Number(parameters["Battlers Frame Delay"] || 10);	//	(): Default delay value between sprites frames.
 // Divider: -- AI --
-Lecode.S_TBS.defaultAiPattern = String(parameters["Default Ai Pattern"] || "melee_fighter") ;	//	(): Default AI pattern.
-Lecode.S_TBS.aiWaitTime = Number(parameters["Ai Wait Time"] || 5) ;	//	(): AI wait time.
+Lecode.S_TBS.defaultAiPattern = String(parameters["Default Ai Pattern"] || "melee_fighter");	//	(): Default AI pattern.
+Lecode.S_TBS.aiWaitTime = Number(parameters["Ai Wait Time"] || 5);	//	(): AI wait time.
 // Divider: -- Actions Restrictions --
-Lecode.S_TBS.oneTimeMove = String(parameters["One Time Move"] || 'false') === 'true' ;	//	(): Enable the one time move feature. (See doc)
-Lecode.S_TBS.oneTimeOffense = String(parameters["One Time Offense"] || 'true') === 'true' ;	//	(): Enable the one time offense feature. (See doc)
-Lecode.S_TBS.autoPass = String(parameters["Auto Pass"] || 'true') === 'true' ;	//	(): Enable the auto pass feature. (See doc)
+Lecode.S_TBS.oneTimeMove = String(parameters["One Time Move"] || 'false') === 'true';	//	(): Enable the one time move feature. (See doc)
+Lecode.S_TBS.oneTimeOffense = String(parameters["One Time Offense"] || 'true') === 'true';	//	(): Enable the one time offense feature. (See doc)
+Lecode.S_TBS.autoPass = String(parameters["Auto Pass"] || 'true') === 'true';	//	(): Enable the auto pass feature. (See doc)
 // Divider: -- Battle End --
-Lecode.S_TBS.escapeSound = String(parameters["Escape Sound"] || "Buzzer2") ;	//	(): Sound when the party try to escape.
-Lecode.S_TBS.endOfBattleWait = Number(parameters["End Of Battle Wait"] || 60) ;	//	(): Wait amount before the end of the battle.
-Lecode.S_TBS.collapseAnimation = Number(parameters["Collapse Animation"] || 136) ;	//	(): Default collapse animation.
+Lecode.S_TBS.escapeSound = String(parameters["Escape Sound"] || "Buzzer2");	//	(): Sound when the party try to escape.
+Lecode.S_TBS.endOfBattleWait = Number(parameters["End Of Battle Wait"] || 60);	//	(): Wait amount before the end of the battle.
+Lecode.S_TBS.collapseAnimation = Number(parameters["Collapse Animation"] || 136);	//	(): Default collapse animation.
 
 
 Lecode.S_TBS.drawLimits = false;
@@ -1238,7 +1240,7 @@ BattleManagerTBS.initMembers = function () {
     this._phase = "init";
     this._subPhase = "";
     this._startCells = [];
-    this._groundCells = [];
+    this._groundCells = {};
     this._cursor = null;
     this._activeCell = null;
     this._spriteset = null;
@@ -1387,12 +1389,12 @@ BattleManagerTBS.createStartCells = function () {
 };
 
 BattleManagerTBS.createGroundCells = function () {
-    this._groundCells = [];
     for (var i = 0; i < $gameMap.width(); i++) {
+        this._groundCells[i] = {};
         for (var j = 0; j < $gameMap.height(); j++) {
             var cell = new TBSCell(i, j);
             cell._regionId = $gameMap.regionId(i, j);
-            this._groundCells.push(cell);
+            this._groundCells[i][j] = cell;
         }
     }
 };
@@ -2790,7 +2792,7 @@ BattleManagerTBS.updateEndOfActionEvents = function () {
 };
 
 BattleManagerTBS.turnOrderShouldWait = function () {
-    var canContinue = this.updateEvents() && this.checkDefeatAndVictory() && !this.isWaiting() && !this.anySequenceRunning();
+    var canContinue = !this.updateEvents() && this.checkDefeatAndVictory() && !this.isWaiting() && !this.anySequenceRunning();
     return !canContinue;
 };
 
@@ -2810,13 +2812,13 @@ BattleManagerTBS.updateEvents = function () {
     $gameTroop.updateInterpreter();
     $gameParty.requestMotionRefresh();
     if ($gameTroop.isEventRunning() || $gameMap.isEventRunning()) {
-        return false;
+        return true;
     }
     $gameTroop.setupBattleEvent();
     if ($gameTroop.isEventRunning() || SceneManager.isSceneChanging()) {
-        return false;
+        return true;
     }
-    return true;
+    return false;
 };
 
 BattleManagerTBS.nextTurn = function () {
@@ -2944,11 +2946,14 @@ BattleManagerTBS.stopBattle = function () {
     InputHandlerTBS.setActive(false);
     this._phase = "battle_stopping";
     this.wait(Lecode.S_TBS.endOfBattleWait);
+    this.executeEventsAtBattleEnd();
 };
 
 BattleManagerTBS.updateBattleStopping = function () {
     LeUtilities.getScene()._windowCommand.close();
     this._directionSelector.hide();
+    this.updateSequences();
+    if (this.updateEvents() || this.anySequenceRunning()) return;
     var waiting = this.isWaiting();
     switch (this._battleStopStatus) {
         case "abort":
@@ -3412,9 +3417,10 @@ BattleManagerTBS.checkSingleCellVisibility = function (cell, center) {
     var cy = center.y * h + h / 2;
 
     var obstacles = [];
-    for (var i = 0; i < this._groundCells.length; i++) {
-        if (this._groundCells[i].isObstacleForLOS())
-            obstacles.push(this._groundCells[i]);
+    var cells = this.getAllCells();
+    for (var i = 0; i < cells.length; i++) {
+        if (cells[i].isObstacleForLOS())
+            obstacles.push(cells[i]);
     }
     cell._scopeVisible = true;
 
@@ -3556,7 +3562,7 @@ BattleManagerTBS.getWalkableGridForEasyStar = function () {
     for (var y = 0; y < $gameMap.height(); y++) {
         var arr = [];
         for (var x = 0; x < $gameMap.width(); x++) {
-            var cell = this.getCellAt(x, y);
+            /*var cell = this.getCellAt(x, y);
             if (cell) {
                 var entity = cell.getEntity();
                 if (entity) {
@@ -3565,7 +3571,9 @@ BattleManagerTBS.getWalkableGridForEasyStar = function () {
                     arr.push(cell.isObstacle() ? 1 : 0);
                 }
             } else
-                arr.push(1);
+                arr.push(1);*/
+            var cell = this.getCellAt(x, y);
+            arr.push(0);
         }
         grid.push(arr);
     }
@@ -3716,6 +3724,15 @@ BattleManagerTBS.executeEventsAtBattleStart = function () {
     }
 };
 
+BattleManagerTBS.executeEventsAtBattleEnd = function () {
+    var tbsEvents = this._tbsEvents;
+    for (var i = 0; i < tbsEvents.length; i++) {
+        var tbsEvent = tbsEvents[i];
+        if (tbsEvent.canTriggerAtBattleEnd())
+            tbsEvent.start();
+    }
+};
+
 BattleManagerTBS.executeEventsByForce = function (id) {
     var tbsEvents = this._tbsEvents;
     for (var i = 0; i < tbsEvents.length; i++) {
@@ -3755,16 +3772,18 @@ BattleManagerTBS.isCellFree = function (cell) {
     return cell.getEntity() == null;
 };
 
-BattleManagerTBS.getEntityCell = function (entity) {
-    return this._groundCells.leU_find(function (c) {
-        return entity._cellX === c.x && entity._cellY === c.y;
-    }.bind(this));
+BattleManagerTBS.getCellAt = function (x, y) {
+    return this._groundCells[x][y];
 };
 
-BattleManagerTBS.getCellAt = function (x, y) {
-    return this._groundCells.leU_find(function (c) {
-        return x == c.x && y == c.y;
-    }.bind(this));
+BattleManagerTBS.getAllCells = function () {
+    var cells = [];
+    for (var i = 0; i < $gameMap.width(); i++) {
+        for (var j = 0; j < $gameMap.height(); j++) {
+            cells.push(this._groundCells[i][j]);
+        }
+    }
+    return cells;
 };
 
 BattleManagerTBS.getEntityAt = function (x, y) {
@@ -4076,7 +4095,10 @@ TBSAiManager.prototype.areConditionsOkay = function () {
 
 TBSAiManager.prototype.update = function () {
     if (this._commandPhase === "making_offense_data") {
-        this.updateOffenseData();
+        var _this = this;
+        setTimeout(function () {
+            _this.updateOffenseData();
+        });
         return;
     }
     if (this._commandRunning) {
@@ -5110,8 +5132,10 @@ TBSSequenceManager.prototype.commandReachTarget = function (param) {
 
     var user = this.readTargets(targetData)[0];
     var target = this.readTargets(targetData2)[0];
-    if (!user.reachEntity(target, type))
-        this.endOfSequence();
+    if (target) {
+        if (!user.reachEntity(target, type))
+            this.endOfSequence();
+    }
 };
 
 TBSSequenceManager.prototype.commandProjectile = function (param) {
@@ -5762,9 +5786,13 @@ TBSCell.prototype.isThereEntity = function () {
 };
 
 TBSCell.prototype.getEntity = function () {
-    return BattleManagerTBS.allEntities().leU_find(function (entity) {
-        return entity._cellX == this.x && entity._cellY == this.y;
-    }.bind(this));
+    var entities = BattleManagerTBS.allEntities();
+    for (var i = 0; i < entities.length; i++) {
+        var entity = entities[i];
+        if (entity.getCell().isSame(this))
+            return entity;
+    }
+    return null;
 };
 
 TBSCell.prototype.regionId = function () {
@@ -6110,7 +6138,7 @@ TBSEntity.prototype.startShake = function (power, duration) {
 TBSEntity.prototype.lookClosestBattler = function (entities) {
     if (entities.length === 0) return;
     var entity = LeUtilities.closestByDistance(this, entities);
-    var cell = BattleManagerTBS.getEntityCell(entity);
+    var cell = entity.getCell();
     this.lookAt(cell);
 };
 
@@ -7116,6 +7144,10 @@ TBSEvent.prototype.canTriggerAtTurnOrderEnd = function () {
 
 TBSEvent.prototype.canTriggerAtBattleStart = function () {
     return this._triggerType === "battle_start";
+};
+
+TBSEvent.prototype.canTriggerAtBattleEnd = function () {
+    return this._triggerType === "battle_end";
 };
 
 
