@@ -260,7 +260,7 @@ var oldSpriteUpdate1 = Sprite.prototype.update;
 Sprite.prototype.update = function() {
     oldSpriteUpdate1.call(this);
     this.leU_updateFlash();
-}
+};
 
 Sprite.prototype.leU_updateFlash = function() {
     if (this._leU_flashDuration > 0) {

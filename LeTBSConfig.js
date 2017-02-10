@@ -766,7 +766,7 @@ Lecode.S_TBS.Config.AI = {
             "move: away_enemies, 100%",
         "else",
             "if: !isInMeleeWith('defined_target')",
-            "move: away_enemies, 50%",
+                "move: away_enemies, 50%",
             "endif",
         "endif"
     ]

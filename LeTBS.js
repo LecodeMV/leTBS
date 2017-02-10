@@ -7,15 +7,13 @@
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
-# This plugin and all its add-ons made by Lecode is under the MIT License.
-# (http://choosealicense.com/licenses/mit/)
-# In addition, you should keep this header.
+# https://github.com/LecodeMV/leTBS/blob/master/LICENSE.txt
 #-----------------------------------------------------------------------------
 # Version History
 #-----------------------------------------------------------------------------
 # - 0.0 : Beta started.
 # - 0.1 : Battles start and end correctly.
-#		  Troop events are correctly triggered in battle. (mostly)
+#	      Troop events are correctly triggered in battle. (mostly)
 #		  Added an end window which appears when pressing ESC on the command window.
 #		  That window allows you to escape and change options.
 #		  Added the tags and parameters for one time move only and one time offense only.
@@ -104,7 +102,7 @@ Lecode.S_TBS = {};
 * @default #C50B1B
 *
 * @param Cell Opacity Color
-* @desc Opacity of the placement cells.
+* @desc Opacity of the positioning cells.
 * @default 175
 *
 * @param Placed Animation
@@ -400,7 +398,7 @@ var parameters = PluginManager.parameters('LeTBS');
 
 Lecode.S_TBS.allyColorCell = String(parameters["Ally Color Cell"] || "#0FC50B");	//	(): Color of actor cells.
 Lecode.S_TBS.enemyColorCell = String(parameters["Enemy Color Cell"] || "#C50B1B");	//	(): Color of enemy cells.
-Lecode.S_TBS.placementCellOpacity = Number(parameters["Cell Opacity Color"] || 175);	//	(Cell Opacity Color): Opacity of the placement cells.
+Lecode.S_TBS.positioningCellOpacity = Number(parameters["Cell Opacity Color"] || 175);	//	(Cell Opacity Color): Opacity of the positioning cells.
 Lecode.S_TBS.placedBattlerAnim = Number(parameters["Placed Animation"] || 124);	//	(Placed Animation): Animation ID when a battler is placed.
 Lecode.S_TBS.instantiateAll = String(parameters["Instantiate All"] || 'true') === 'true';	//	(): Instantiate all enemies at the same time.
 Lecode.S_TBS.displayStartMessages = String(parameters["Display Start Messages"] || 'false') === 'true';	//	(): Show start messages ?
@@ -740,6 +738,8 @@ Scene_Battle.prototype.start = function () {
         InputHandlerTBS.addWindowBlockingTouch(this._windowStatus);
         InputHandlerTBS.addWindowBlockingTouch(this._helpWindow);
 
+        LeUtilities.getScene().showPositioningWindow();
+
         BattleManagerTBS.startBattle();
     } else {
         Lecode.S_TBS.oldSB_start.call(this);
@@ -774,7 +774,9 @@ Lecode.S_TBS.oldSB_createAllWindows = Scene_Battle.prototype.createAllWindows;
 Scene_Battle.prototype.createAllWindows = function () {
     if (Lecode.S_TBS.commandOn) {
         //this.createLogWindow();
-        this.createPlacementWindow();
+        this.createPositioningWindow();
+        this.createPositioningConfirmWindow();
+        this.createPositioningInfoWindow();
         this.createConfirmationWindow();
         this.createStatusWindow();
         this.createCommandWindow();
@@ -788,11 +790,36 @@ Scene_Battle.prototype.createAllWindows = function () {
     }
 };
 
-Scene_Battle.prototype.createPlacementWindow = function () {
-    this._windowPlacement = new Window_TBSPlacementInfo();
-    this._windowPlacement.hide();
-    this._windowPlacement.deactivate();
-    this.addWindow(this._windowPlacement);
+Scene_Battle.prototype.createPositioningWindow = function () {
+    this._windowPositioning = new Window_TBSPositioning();
+    this._windowPositioning.setHandler('ok', this.onPositioningOk.bind(this));
+    this._windowPositioning.setHandler('cursor_up', this.onPositioningCursorUp.bind(this));
+    this._windowPositioning.hide();
+    this._windowPositioning.close();
+    this._windowPositioning.deactivate();
+    this._windowPositioning.x = Graphics.width / 2 - this._windowPositioning.width / 2;
+    this._windowPositioning.y = Graphics.height - this._windowPositioning.height;
+    this.addWindow(this._windowPositioning);
+};
+
+Scene_Battle.prototype.createPositioningConfirmWindow = function () {
+    this._windowPositioningConfirm = new Window_TBSPositioningConfirm();
+    this._windowPositioningConfirm.setHandler('ok', this.onPositioningConfirmOk.bind(this));
+    this._windowPositioningConfirm.setHandler('cancel', this.onPositioningConfirmCancel.bind(this));
+    this._windowPositioningConfirm.setHandler('cursor_down', this.onPositioningConfirmCursorDown.bind(this));
+    this._windowPositioningConfirm.hide();
+    this._windowPositioningConfirm.close();
+    this._windowPositioningConfirm.deactivate();
+    this._windowPositioningConfirm.x = this._windowPositioning.x;
+    this._windowPositioningConfirm.y = this._windowPositioning.y - this._windowPositioningConfirm.height;
+    this.addWindow(this._windowPositioningConfirm);
+};
+
+Scene_Battle.prototype.createPositioningInfoWindow = function () {
+    this._windowPositioningInfo = new Window_TBSPositioningInfo();
+    this._windowPositioningInfo.hide();
+    this._windowPositioningInfo.deactivate();
+    this.addWindow(this._windowPositioningInfo);
 };
 
 Scene_Battle.prototype.createConfirmationWindow = function () {
@@ -873,12 +900,58 @@ Scene_Battle.prototype.createEndCommandWindow = function () {
     this.addWindow(this._windowEndCommand);
 };
 
-Scene_Battle.prototype.showPlacementWindow = function (cell, battler) {
-    this.placeWindowOverCell(this._windowPlacement, cell);
-    this._windowPlacement.show();
-    this._windowPlacement.open();
-    this._windowPlacement._battler = battler;
-    this._windowPlacement.refresh();
+Scene_Battle.prototype.activatePositioningWindow = function () {
+    this._windowPositioning.selectLast();
+    this._windowPositioning.activate();
+};
+
+Scene_Battle.prototype.onPositioningOk = function () {
+    var actor = this._windowPositioning.actor();
+    this._windowPositioning.disableSelection();
+    this._windowPositioning.refresh();
+    BattleManagerTBS.processActorPositioning(actor);
+};
+
+Scene_Battle.prototype.onPositioningCursorUp = function () {
+    this._windowPositioning.deactivate();
+    this._windowPositioning.deselect();
+    this._windowPositioningConfirm.activate();
+    this._windowPositioningConfirm.selectLast();
+};
+
+Scene_Battle.prototype.onPositioningConfirmOk = function () {
+    BattleManagerTBS.positioningPhaseEnd();
+};
+
+Scene_Battle.prototype.onPositioningConfirmCancel = function () {
+    this.onPositioningConfirmCursorDown();
+};
+
+Scene_Battle.prototype.onPositioningConfirmCursorDown = function () {
+    this._windowPositioning.activate();
+    this._windowPositioning.selectLast();
+    this._windowPositioningConfirm.deactivate();
+    this._windowPositioningConfirm.deselect();
+};
+
+Scene_Battle.prototype.onTBSBattleBeginning = function () {
+    this.hideConfirmationWindow();
+    //this._windowPositioning.open();
+};
+
+Scene_Battle.prototype.showPositioningWindow = function (cell, battler) {
+    this._windowPositioning.open();
+    this._windowPositioning.show();
+    this._windowPositioningConfirm.open();
+    this._windowPositioningConfirm.show();
+    this._windowPositioning.refresh();
+    this._windowPositioningConfirm.refresh();
+    this._windowPositioning.activate();
+    /*this.placeWindowOverCell(this._windowPositioningInfo, cell);
+    this._windowPositioningInfo.show();
+    this._windowPositioningInfo.open();
+    this._windowPositioningInfo._battler = battler;
+    this._windowPositioningInfo.refresh();*/
 };
 
 Scene_Battle.prototype.showStatusWindow = function (battler) {
@@ -960,8 +1033,8 @@ Scene_Battle.prototype.placeWindowOverCell = function (window, cell) {
     window._leU_floatData.ini_pos = [x, y];
 };
 
-Scene_Battle.prototype.hidePlacementWindow = function (cell, battler) {
-    this._windowPlacement.close();
+Scene_Battle.prototype.hidePositioningWindow = function (cell, battler) {
+    this._windowPositioningInfo.close();
 };
 
 Scene_Battle.prototype.hideHelpWindow = function () {
@@ -1021,7 +1094,7 @@ Scene_Battle.prototype.onEndCommandInput = function (command) {
 };
 
 Scene_Battle.prototype.getWindowsWChangeableOpa = function () {
-    return [this._windowConfirm, this._windowPlacement, this._windowCommand, this._windowStatus,
+    return [this._windowConfirm, this._windowPositioningInfo, this._windowCommand, this._windowStatus,
     this._windowSkill, this._helpWindow
     ];
 };
@@ -1240,6 +1313,8 @@ BattleManagerTBS.initMembers = function () {
     this._phase = "init";
     this._subPhase = "";
     this._startCells = [];
+    this._positioningEntityToSwap = null;
+    this._currentPositioningEntity = null;
     this._groundCells = {};
     this._cursor = null;
     this._activeCell = null;
@@ -1320,7 +1395,7 @@ BattleManagerTBS.isWaiting = function () {
 
 BattleManagerTBS.startBattle = function () {
     this.prepare();
-    this.processPlacementPhase();
+    this.processPositioningPhase();
 };
 
 BattleManagerTBS.prepare = function () {
@@ -1383,7 +1458,7 @@ BattleManagerTBS.createStartCells = function () {
         var cell = new TBSCell(x, y);
         cell._event = eventObj.event();
         if (name == "ally" || name == "enemy")
-            this.createPlacementCell(name, x, y, cell);
+            this.createPositioningCell(name, x, y, cell);
         this._startCells.push(cell);
     }.bind(this));
 };
@@ -1587,8 +1662,8 @@ BattleManagerTBS.setInputOpacity = function () {
 BattleManagerTBS.updatePhase = function () {
     if ($gameMessage.isBusy()) return;
     switch (this._phase) {
-        case "placement":
-            this.updatePlacementPhase();
+        case "positioning":
+            this.updatePositioningPhase();
             break;
         case "battle_beginning":
             this.updateBeginningPhase();
@@ -1617,38 +1692,38 @@ BattleManagerTBS.updateTBSEvents = function () {
     }
 };
 
-BattleManagerTBS.createPlacementCell = function (type, x, y, cell) {
-    var opacity = Lecode.S_TBS.placementCellOpacity;
+BattleManagerTBS.createPositioningCell = function (type, x, y, cell) {
+    var opacity = Lecode.S_TBS.positioningCellOpacity;
     var color = (type == "ally") ? Lecode.S_TBS.allyColorCell : Lecode.S_TBS.enemyColorCell;
     this.getLayer("scopes").drawCell(x, y, opacity, color);
     cell._type = type;
 };
 
-BattleManagerTBS.processPlacementPhase = function () {
-    this._phase = "placement";
+BattleManagerTBS.processPositioningPhase = function () {
+    this._phase = "positioning";
     this._subPhase = "";
-    this._actorsToPlace = [];
-    this._enemiesToPlace = [];
-    $gameParty.battleMembers().forEach(function (mem) {
+    this._actorsToPositionate = [];
+    this._enemiesToPositionate = [];
+    /*$gameParty.battleMembers().forEach(function (mem) {
         if (!mem.isDead())
-            this._actorsToPlace.push(mem);
-    }.bind(this));
+            this._actorsToPositionate.push(mem);
+    }.bind(this));*/
     $gameTroop.members().forEach(function (mem) {
-        this._enemiesToPlace.push(mem);
+        this._enemiesToPositionate.push(mem);
     }.bind(this));
-    this.processEnemyPlacement();
+    this.processEnemyPositioning();
 
-    InputHandlerTBS.setOnTouchCallback(this.placementPhaseOnTouchInput.bind(this));
-    InputHandlerTBS.setOnTouchCancelCallback(this.placementPhaseOnInputCancel.bind(this));
-    InputHandlerTBS.setOnOkCallback(this.placementPhaseOnInputOk.bind(this));
-    InputHandlerTBS.setOnCancelCallback(this.placementPhaseOnInputCancel.bind(this));
-    InputHandlerTBS.setOnRightCallback(this.placementPhaseOnInputRight.bind(this));
-    InputHandlerTBS.setOnLeftCallback(this.placementPhaseOnInputLeft.bind(this));
-    InputHandlerTBS.setOnDownCallback(this.placementPhaseOnInputDown.bind(this));
-    InputHandlerTBS.setOnUpCallback(this.placementPhaseOnInputUp.bind(this));
+    InputHandlerTBS.setOnTouchCallback(this.positioningPhaseOnTouchInput.bind(this));
+    InputHandlerTBS.setOnTouchCancelCallback(this.positioningPhaseOnInputCancel.bind(this));
+    InputHandlerTBS.setOnOkCallback(this.positioningPhaseOnInputOk.bind(this));
+    InputHandlerTBS.setOnCancelCallback(this.positioningPhaseOnInputCancel.bind(this));
+    InputHandlerTBS.setOnRightCallback(this.positioningPhaseOnInputRight.bind(this));
+    InputHandlerTBS.setOnLeftCallback(this.positioningPhaseOnInputLeft.bind(this));
+    InputHandlerTBS.setOnDownCallback(this.positioningPhaseOnInputDown.bind(this));
+    InputHandlerTBS.setOnUpCallback(this.positioningPhaseOnInputUp.bind(this));
 };
 
-BattleManagerTBS.placementPhaseOnTouchInput = function (selectedCell) {
+BattleManagerTBS.positioningPhaseOnTouchInput = function (selectedCell) {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByTouch(selectedCell);
@@ -1659,29 +1734,29 @@ BattleManagerTBS.placementPhaseOnTouchInput = function (selectedCell) {
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputOk = function () {
+BattleManagerTBS.positioningPhaseOnInputOk = function () {
     switch (this._subPhase) {
         case "input":
-            this.placementPhaseOk();
+            this.positioningPhaseOk();
             break;
         case "directionSelector_input":
-            this.directionSelectorValidatePlacement();
+            this.directionSelectorValidatePositioning();
             break;
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputCancel = function () {
+BattleManagerTBS.positioningPhaseOnInputCancel = function () {
     switch (this._subPhase) {
         case "input":
-            this.placementPhaseCancel();
+            this.positioningPhaseCancel();
             break;
         case "directionSelector_input":
-            this.directionSelectorCancelPlacement();
+            this.directionSelectorCancelPositioning();
             break;
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputLeft = function () {
+BattleManagerTBS.positioningPhaseOnInputLeft = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("left");
@@ -1692,7 +1767,7 @@ BattleManagerTBS.placementPhaseOnInputLeft = function () {
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputRight = function () {
+BattleManagerTBS.positioningPhaseOnInputRight = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("right");
@@ -1703,7 +1778,7 @@ BattleManagerTBS.placementPhaseOnInputRight = function () {
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputDown = function () {
+BattleManagerTBS.positioningPhaseOnInputDown = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("down");
@@ -1714,7 +1789,7 @@ BattleManagerTBS.placementPhaseOnInputDown = function () {
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputUp = function () {
+BattleManagerTBS.positioningPhaseOnInputUp = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("up");
@@ -1725,21 +1800,21 @@ BattleManagerTBS.placementPhaseOnInputUp = function () {
     }
 };
 
-BattleManagerTBS.updatePlacementPhase = function () {
+BattleManagerTBS.updatePositioningPhase = function () {
     if (this._subPhase === "troop") {
         if (!this.getLayer("animations").isAnimationPlaying()) {
-            if (this._enemiesToPlace.length === 0)
-                this.processActorsPlacement();
+            if (this._enemiesToPositionate.length === 0)
+                this.waitForPositioningInput();
             else
                 this.placeNextEnemy();
         }
     }
 };
 
-BattleManagerTBS.processEnemyPlacement = function () {
+BattleManagerTBS.processEnemyPositioning = function () {
     this._subPhase = "troop";
     if (Lecode.S_TBS.instantiateAll) {
-        while (this._enemiesToPlace.length > 0)
+        while (this._enemiesToPositionate.length > 0)
             this.placeNextEnemy();
     } else {
         this.placeNextEnemy();
@@ -1747,7 +1822,7 @@ BattleManagerTBS.processEnemyPlacement = function () {
 };
 
 BattleManagerTBS.placeNextEnemy = function () {
-    var enemy = this._enemiesToPlace.shift();
+    var enemy = this._enemiesToPositionate.shift();
     var cells = this.enemyStartCells().filter(function (c) {
         return Number(c._event.note) === enemy.index() + 1 && this.isCellFree(c);
     }.bind(this));
@@ -1763,18 +1838,50 @@ BattleManagerTBS.placeNextEnemy = function () {
     }
 };
 
-BattleManagerTBS.processActorsPlacement = function () {
-    InputHandlerTBS.setActive(true);
-    this._subPhase = "input";
-    this.placementSelect(this.allyStartCells()[0]);
+BattleManagerTBS.waitForPositioningInput = function () {
+    this._subPhase = "wait";
+    this.selectNextStartCell();
+    LeUtilities.getScene().activatePositioningWindow();
 };
 
-BattleManagerTBS.placementSelect = function (cell) {
+BattleManagerTBS.processActorPositioning = function (actor) {
+    InputHandlerTBS.setActive(true);
+    this._subPhase = "input";
+    var currentEntity = this.getEntityWithActorId(actor.actorId());
+    if (currentEntity) {
+        this._currentPositioningEntity = currentEntity;
+        this.positioningSelect(currentEntity.getCell());
+        return;
+    }
+    var entity = new TBSEntity(actor, this.getLayer("battlers"));
+    entity.setOpacity(255);
+    entity.startFlash([255, 255, 255, 255], 20, true);
+    var cell = this.getNextActorPositioningCell();
+    this.getLayer("animations").newAnimation(Lecode.S_TBS.placedBattlerAnim, false, 0, cell, entity._sprite);
+    this._currentPositioningEntity = entity;
+    this.positioningSelect(cell);
+};
+
+BattleManagerTBS.positioningSelect = function (cell) {
     cell.select();
-    this.centerActiveCell();
+    this.centerCell(cell);
     this.updateCursor();
-    var battler = this._actorsToPlace[0];
-    LeUtilities.getScene().showPlacementWindow(cell, battler);
+    if (this._currentPositioningEntity) {
+        if (this._positioningEntityToSwap) {
+            this._positioningEntityToSwap.stopFLash();
+        }
+        var entity = cell.getEntity();
+        if (entity) {
+            this._positioningEntityToSwap = entity;
+            this._currentPositioningEntity.stopFLash();
+            this._currentPositioningEntity.startFlash([255, 255, 255, 255], 20, true);
+            entity.startFlash([255, 255, 255, 255], 20, true);
+        } else {
+            this._currentPositioningEntity.setCell(cell);
+            this.updateEnemiesDirectionForPositioning();
+            this._positioningEntityToSwap = null;
+        }
+    }
 };
 
 BattleManagerTBS.selectStartCellByDir = function (dir) {
@@ -1810,7 +1917,7 @@ BattleManagerTBS.selectStartCellByDir = function (dir) {
             break;
     }
     if (found && found != cell) {
-        this.placementSelect(found);
+        this.positioningSelect(found);
         SoundManager.playCursor();
     }
 };
@@ -1821,20 +1928,27 @@ BattleManagerTBS.selectStartCellByTouch = function (cell) {
         var currentCell = this._activeCell;
         if (this.isCellInScope(cell, scope)) {
             if (currentCell.isSame(cell)) {
-                this.placementPhaseOk();
+                this.positioningPhaseOk();
             } else {
-                this.placementSelect(cell);
+                this.positioningSelect(cell);
             }
         } else {
-            this.placementPhaseOk();
+            this.positioningPhaseOk();
         }
     }
 };
 
-BattleManagerTBS.selectNextStartCell = function () {
+BattleManagerTBS.getNextActorPositioningCell = function () {
+    if (this.allyEntities().length >= this.allyStartCells().length)
+        return this.allyStartCells()[0];
     var currentIndex = this.allyStartCells().indexOf(this._activeCell);
+    if (currentIndex === -1) {
+        return this.allyStartCells()[0];
+    }
     var cell = this._activeCell;
     var currentEntity = cell.getEntity();
+    if (!currentEntity)
+        return cell;
     var index = currentIndex;
     do {
         if (index === this.allyStartCells().length - 1)
@@ -1844,37 +1958,44 @@ BattleManagerTBS.selectNextStartCell = function () {
         cell = this.allyStartCells()[index];
         currentEntity = cell.getEntity();
     } while (currentEntity);
-    this.placementSelect(cell);
+    return cell;
+};
+
+BattleManagerTBS.selectNextStartCell = function () {
+    var cell = this.getNextActorPositioningCell();
+    this.positioningSelect(cell);
     SoundManager.playCursor();
 };
 
-BattleManagerTBS.selectPreviousStartCell = function () {
-    var currentIndex = this.allyStartCells().indexOf(this._activeCell);
-    var index = currentIndex === 0 ? this.allyStartCells().length - 1 : currentIndex - 1;
-    this.placementSelect(this.allyStartCells()[index]);
-    SoundManager.playCursor();
-};
-
-BattleManagerTBS.placementPhaseOk = function () {
+BattleManagerTBS.positioningPhaseOk = function () {
+    SoundManager.playOk();
     var cell = this._activeCell;
-    var currentEntity = cell.getEntity();
-    if (currentEntity) {
-        this.removeBattlerEntity(currentEntity);
+    var entity = this._positioningEntityToSwap;
+    if (entity) {
+        entity.setCell(this._currentPositioningEntity.getCell());
+        entity.stopFLash();
+        this._currentPositioningEntity.setCell(cell);
+        this._positioningEntityToSwap = null;
+        return;
     }
-    var battler = this._actorsToPlace.shift();
-    var entity = this.placeBattler(battler, cell);
-    this.callDirectionSelector(entity, cell);
+    this._battlerEntities.push(this._currentPositioningEntity);
+    this.callDirectionSelector(this._currentPositioningEntity, cell);
 };
 
-BattleManagerTBS.placementPhaseCancel = function () {
-    var cell = this._activeCell;
-    var currentEntity = cell.getEntity();
-    if (currentEntity) {
-        this.removeBattlerEntity(currentEntity);
-        this.placementSelect(this._activeCell);
-        SoundManager.playCancel();
-    } else
+BattleManagerTBS.positioningPhaseCancel = function () {
+    var entity = this._currentPositioningEntity;
+    if (!entity) {
         SoundManager.playBuzzer();
+        return;
+    }
+    InputHandlerTBS.setActive(false);
+    var actor = LeUtilities.getScene()._windowPositioning.actor();
+    LeUtilities.getScene()._windowPositioning.enableSelection();
+    LeUtilities.getScene()._windowPositioning.refresh();
+    LeUtilities.getScene().activatePositioningWindow();
+    SoundManager.playCancel();
+    this.destroyEntity(entity);
+    this._currentPositioningEntity = null;
 };
 
 BattleManagerTBS.placeBattler = function (battler, cell) {
@@ -1883,26 +2004,27 @@ BattleManagerTBS.placeBattler = function (battler, cell) {
     entity.setCell(cell);
     this._battlerEntities.push(entity);
     SoundManager.playOk();
-    this.updateEnemiesDirectionWhilePlacement();
+    this.updateEnemiesDirectionForPositioning();
     return entity;
 };
 
 BattleManagerTBS.removeBattlerEntity = function (entity) {
-    this._actorsToPlace.unshift(entity._battler);
+    this._actorsToPositionate.unshift(entity._battler);
     LeUtilities.removeInArray(this.allPlayableEntities(), entity);
     this.getLayer("battlers").removeChild(entity._sprite);
 };
 
-BattleManagerTBS.updateEnemiesDirectionWhilePlacement = function () {
+BattleManagerTBS.updateEnemiesDirectionForPositioning = function () {
+    var actors = this.allyEntities().concat([this._currentPositioningEntity]);
     this.enemyEntities().forEach(function (ent) {
-        ent.lookClosestBattler(this.allyEntities());
+        ent.lookClosestBattler(actors);
     }.bind(this));
 };
 
 BattleManagerTBS.callDirectionSelector = function (battler, cell) {
     this._subPhase = "directionSelector_input";
     this._directionSelector.set(cell, battler);
-    LeUtilities.getScene().hidePlacementWindow(cell, battler);
+    LeUtilities.getScene().hidePositioningWindow(cell, battler);
 };
 
 BattleManagerTBS.setDirectionSelectorUp = function () {
@@ -1921,43 +2043,46 @@ BattleManagerTBS.setDirectionSelectorRight = function () {
     this._directionSelector.setDir(6);
 };
 
-BattleManagerTBS.directionSelectorValidatePlacement = function () {
+BattleManagerTBS.directionSelectorValidatePositioning = function () {
+    InputHandlerTBS.setActive(false);
     SoundManager.playOk();
+    Input.clear();
+    this._currentPositioningEntity.stopFLash();
+    this._currentPositioningEntity.setOpacity(255);
     this._directionSelector.hide();
     this._subPhase = "input";
-    if (this.canEndPlacementPhase())
-        this.placementPhaseEnd();
-    else
-        this.selectNextStartCell();
+    this._currentPositioningEntity = null;
+    this.selectNextStartCell();
+    LeUtilities.getScene().activatePositioningWindow();
 };
 
 BattleManagerTBS.setDirectionSelectionDirByTouch = function (selectedCell) {
     var entity = this._directionSelector._battlerEntity;
     entity.lookAt(selectedCell);
-    this.directionSelectorValidatePlacement();
+    this.directionSelectorValidatePositioning();
 };
 
-BattleManagerTBS.directionSelectorCancelPlacement = function () {
+BattleManagerTBS.directionSelectorCancelPositioning = function () {
     this._directionSelector.hide();
     this._subPhase = "input";
-    this.placementPhaseCancel();
+    this.positioningPhaseCancel();
 };
 
-BattleManagerTBS.placementPhaseEnd = function () {
+BattleManagerTBS.positioningPhaseEnd = function () {
     this._subPhase = "confirm";
     Input.clear();
     LeUtilities.getScene().showConfirmationWindow();
 };
 
-BattleManagerTBS.resumePlacementPhase = function () {
+BattleManagerTBS.resumePositioningPhase = function () {
     LeUtilities.getScene().hideConfirmationWindow();
-    this.placementPhaseCancel();
+    this.positioningPhaseCancel();
     this._subPhase = "input";
 };
 
 BattleManagerTBS.onConfirmationWindowOK = function () {
     switch (this._phase) {
-        case "placement":
+        case "positioning":
             this.battleBeginning();
             break;
     }
@@ -1965,15 +2090,15 @@ BattleManagerTBS.onConfirmationWindowOK = function () {
 
 BattleManagerTBS.onConfirmationWindowCancel = function () {
     switch (this._phase) {
-        case "placement":
-            this.resumePlacementPhase();
+        case "positioning":
+            this.resumePositioningPhase();
             break;
     }
 };
 
 BattleManagerTBS.battleBeginning = function () {
     this._phase = "battle_beginning";
-    LeUtilities.getScene().hideConfirmationWindow();
+    LeUtilities.getScene().onTBSBattleBeginning();
 
     this._startSprite.visible = true;
     this._startSprite.x = Graphics.width / 2 - this._startSprite.width / 2;
@@ -2016,7 +2141,7 @@ BattleManagerTBS.processBattle = function () {
     this.allEntities().forEach(function (entity) {
         entity.onBattleStart();
     }.bind(this));
-    this.hidePlacementCells();
+    this.hidePositioningCells();
     this.determineTurnOrder();
     $gameTroop.increaseTurn();
     this.setEntitiesFlag();
@@ -2159,7 +2284,7 @@ BattleManagerTBS.updateBattleProcessing = function () {
         this.startTurn();
 };
 
-BattleManagerTBS.hidePlacementCells = function () {
+BattleManagerTBS.hidePositioningCells = function () {
     this.getLayer("scopes").clear();
 };
 
@@ -3011,6 +3136,11 @@ BattleManagerTBS.onEntityRevive = function (entity) {
     this._turnOrderVisual.updateOnEntityRevive(this._turnOrder, this._activeIndex);
 };
 
+BattleManagerTBS.destroyEntity = function (entity) {
+    entity.destroy();
+    var index = this._battlerEntities.indexOf(entity);
+    this._battlerEntities.splice(index, 1);
+};
 
 
 BattleManagerTBS.drawActionScope = function (entity, data) {
@@ -3848,8 +3978,8 @@ BattleManagerTBS.getFlaggedEntity = function (flagId) {
     return null;
 };
 
-BattleManagerTBS.canEndPlacementPhase = function () {
-    return this._actorsToPlace.length === 0;
+BattleManagerTBS.canEndPositioningPhase = function () {
+    return this._actorsToPositionate.length === 0;
 };
 
 BattleManagerTBS.centerActiveCell = function () {
@@ -3920,7 +4050,7 @@ BattleManagerTBS.movableLayers = function () {
 
 BattleManagerTBS.mapVisuals = function () {
     var scene = LeUtilities.getScene();
-    return [scene._windowPlacement, scene._windowCommand, scene._windowSkill, scene._windowItem];
+    return [scene._windowPositioningInfo, scene._windowCommand, scene._windowSkill, scene._windowItem];
 };
 
 
@@ -5896,6 +6026,7 @@ TBSEntity.prototype.createSprite = function (battler, layer) {
     this._afterPose = "idle";
     this._poseLoop = false;
     this._fixedPose = null;
+    this._layer = layer;
     layer.addChild(this._sprite);
 };
 
@@ -5913,6 +6044,10 @@ TBSEntity.prototype.setSpeed = function (speed) {
 
 TBSEntity.prototype.changeSpeed = function (speed) {
     this._speed += speed;
+};
+
+TBSEntity.prototype.destroy = function () {
+    this._layer.removeChild(this._sprite);
 };
 
 TBSEntity.prototype.startSequence = function (id, action) {
@@ -6201,8 +6336,6 @@ TBSEntity.prototype.forcePush = function (user, sourceCell, distance, obj, damag
     distance += user.getKnockbackBonus() - this.getKnockbackReduction();
     var old = this.getDir();
     this.lookAway(sourceCell);
-    console.log("distance:", distance);
-    console.log("damage:", damage);
     this.forceMoveStraight(distance, damage);
     this.setDir(old);
     this._moveUpdateDir = false;
@@ -6594,11 +6727,11 @@ TBSEntity.prototype.passAfterObjUse = function (obj) {
 };
 
 TBSEntity.prototype.oneTimeMove = function () {
-    return this.rpgObject().leTbs_oneTimeMove;
+    return !!this.rpgObject().leTbs_oneTimeMove;
 };
 
 TBSEntity.prototype.oneTimeOffense = function () {
-    return this.rpgObject().leTbs_oneTimeOffense;
+    return !!this.rpgObject().leTbs_oneTimeOffense;
 };
 
 TBSEntity.prototype.getCollapseAnimation = function () {
@@ -6611,10 +6744,10 @@ TBSEntity.prototype.getAiPattern = function () {
 
 TBSEntity.prototype.isPassableOnDeath = function () {
     var test = this.battler().states().some(function (state) {
-        return state && state.leTbs_passableOnDeath;
+        return state && !!state.leTbs_passableOnDeath;
     });
     if (test) return true;
-    return this.rpgObject().leTbs_passableOnDeath;
+    return !!this.rpgObject().leTbs_passableOnDeath;
 };
 
 TBSEntity.prototype.isPassable = function () {
@@ -6635,6 +6768,22 @@ TBSEntity.prototype.entitiesCanLayOnMe = function () {
     });
     if (test) return true;
     return this.rpgObject().leTbs_canLayOnMe;
+};
+
+TBSEntity.prototype.setOpacity = function (value) {
+    this._sprite.opacity = value;
+};
+
+TBSEntity.prototype.startFlash = function (colorArray, duration, loop) {
+    if (loop)
+        this._sprite.leU_startLoopFlash(colorArray, duration);
+    else
+        this._sprite.leU_startFlash(colorArray, duration);
+};
+
+TBSEntity.prototype.stopFLash = function () {
+    this._sprite.leU_endLoopFlash();
+    this._sprite.leU_clearFlash();
 };
 
 TBSEntity.prototype.getCollisionDamageBonus = function (damage) {
@@ -7216,10 +7365,23 @@ function Window_TBSConfirm() {
 }
 
 /*-------------------------------------------------------------------------
-* Window_TBSPlacementInfo
+* Window_TBSPositioning
 -------------------------------------------------------------------------*/
+function Window_TBSPositioning() {
+    this.initialize.apply(this, arguments);
+}
 
-function Window_TBSPlacementInfo() {
+/*-------------------------------------------------------------------------
+* Window_TBSPositioningConfirm
+-------------------------------------------------------------------------*/
+function Window_TBSPositioningConfirm() {
+    this.initialize.apply(this, arguments);
+}
+
+/*-------------------------------------------------------------------------
+* Window_TBSPositioningInfo
+-------------------------------------------------------------------------*/
+function Window_TBSPositioningInfo() {
     this.initialize.apply(this, arguments);
 }
 /*-------------------------------------------------------------------------
