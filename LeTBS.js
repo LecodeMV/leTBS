@@ -7,9 +7,7 @@
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
-# This plugin and all its add-ons made by Lecode is under the MIT License.
-# (http://choosealicense.com/licenses/mit/)
-# In addition, you should keep this header.
+# https://github.com/LecodeMV/leTBS/blob/master/LICENSE.txt
 #-----------------------------------------------------------------------------
 # Version History
 #-----------------------------------------------------------------------------
