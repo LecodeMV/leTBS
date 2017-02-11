@@ -3769,7 +3769,9 @@ BattleManagerTBS.isCellFree = function (cell) {
 };
 
 BattleManagerTBS.getCellAt = function (x, y) {
-    return this._groundCells[x][y];
+    if (this._groundCells[x])
+        return this._groundCells[x][y];
+    return null;
 };
 
 BattleManagerTBS.getAllCells = function () {
