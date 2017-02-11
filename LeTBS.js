@@ -3560,7 +3560,7 @@ BattleManagerTBS.getWalkableGridForEasyStar = function () {
     for (var y = 0; y < $gameMap.height(); y++) {
         var arr = [];
         for (var x = 0; x < $gameMap.width(); x++) {
-            /*var cell = this.getCellAt(x, y);
+            var cell = this.getCellAt(x, y);
             if (cell) {
                 var entity = cell.getEntity();
                 if (entity) {
@@ -3569,9 +3569,7 @@ BattleManagerTBS.getWalkableGridForEasyStar = function () {
                     arr.push(cell.isObstacle() ? 1 : 0);
                 }
             } else
-                arr.push(1);*/
-            var cell = this.getCellAt(x, y);
-            arr.push(0);
+                arr.push(1);
         }
         grid.push(arr);
     }
