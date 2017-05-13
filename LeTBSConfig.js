@@ -8,53 +8,53 @@ Lecode.S_TBS.Config.Battler_Sprites = {
 
     // Config_name: data
     "Default": [
-        // [pose_name,filename,frames,hue]
-        ["idle", "_idle", 3, 0],
-        ["dead", "_dead", 1, 0]
+        // [pose_name,filename,frames]
+        ["idle", "_idle", 3],
+        ["dead", "_dead", 1]
     ],
 
     "Angela": [
-        ["idle", "_idle", 1, 0],
-        ["move", "_move", 4, 0],
-        ["cast", "_cast", 1, 0],
-        ["atk", "_atk", 4, 0],
-        ["hit", "_hit", 1, 0],
-        ["dead", "_dead", 1, 0],
-        ["turn_start", "_victory", 5, 0],
-        ["victory", "_victory", 5, 0]
+        ["idle", "_idle", 1],
+        ["move", "_move", 4],
+        ["cast", "_cast", 1],
+        ["atk", "_atk", 4],
+        ["hit", "_hit", 1],
+        ["dead", "_dead", 1],
+        ["turn_start", "_victory", 5],
+        ["victory", "_victory", 5]
     ],
 
     "Duran": [
-        ["idle", "_idle", 1, 0],
-        ["move", "_move", 4, 0],
-        ["cast", "_cast", 3, 0],
-        ["atk", "_atk", 4, 0],
-        ["hit", "_hit", 1, 0],
-        ["dead", "_dead", 1, 0]
+        ["idle", "_idle", 1],
+        ["move", "_move", 4],
+        ["cast", "_cast", 3],
+        ["atk", "_atk", 4],
+        ["hit", "_hit", 1],
+        ["dead", "_dead", 1]
     ],
 
     "Rabbit": [
-        ["idle", "_idle", 1, 0],
-        ["move", "_move", 3, 0],
-        ["atk", "_atk", 3, 0],
-        ["hit", "_hit", 1, 0],
-        ["dead", "_dead", 1, 0]
+        ["idle", "_idle", 1],
+        ["move", "_move", 3],
+        ["atk", "_atk", 3],
+        ["hit", "_hit", 1],
+        ["dead", "_dead", 1]
     ],
 
     "Mago": [
-        ["idle", "_idle", 1, 0],
-        ["move", "_move", 3, 0],
-        ["cast", "_cast", 2, 0],
-        ["atk", "_atk", 4, 0],
-        ["hit", "_hit", 1, 0],
-        ["dead", "_dead", 1, 0]
+        ["idle", "_idle", 1],
+        ["move", "_move", 3],
+        ["cast", "_cast", 2],
+        ["atk", "_atk", 4],
+        ["hit", "_hit", 1],
+        ["dead", "_dead", 1]
     ],
 
     "Evil Statue": [
-        ["idle", "_idle", 1, 0],
-        ["cast", "_cast", 3, 0],
-        ["atk", "_cast", 3, 0],
-        ["dead", "_dead", 1, 0]
+        ["idle", "_idle", 1],
+        ["cast", "_cast", 3],
+        ["atk", "_cast", 3],
+        ["dead", "_dead", 1]
     ]
 
 };
@@ -197,6 +197,21 @@ Lecode.S_TBS.Config.Marks = {
         }
     },
 
+    "mago_mark": {
+        body_anim: 171,
+        disappearing_anim: 172,
+        size: "square(1)",
+        triggers: {
+            "turn_end": {
+                stop_movement: false,
+                skill_effects: 32,
+                effects_aoe: "circle(0)"
+            }
+        },
+        max: 1,
+        duration: [3, "turn_end"]
+    },
+
 };
 
 /*-------------------------------------------------------------------------
@@ -254,6 +269,72 @@ Lecode.S_TBS.Config.Projectiles = {
         jump: 0
     },
 
+    "great_wind": {
+        anim: [168, 56, 50],
+        adapt_angle: true,
+        speed: 14,
+        jump: 0
+    },
+
+};
+
+/*-------------------------------------------------------------------------
+* Summons
+-------------------------------------------------------------------------*/
+Lecode.S_TBS.Config.Summons = {
+
+    "ice_block": {
+        active: false,
+        kind: "enemy",
+        id: 12,
+        body_anim: [163,164,165,166],
+        tied_to_caster: false,
+        stats: {
+            mhp: "+30%"
+        }
+    },
+
+    "wind_spirit": {
+        active: true,
+        turn_order: "after_caster",
+        visible_in_timeline: true,
+        type: "user_playable",
+        kind: "actor",
+        id: 10,
+        tied_to_caster: true,
+        stats: {
+            default: "90%",
+            mhp: "70%",
+            mmp: "+10%"
+        }
+    },
+
+    "pyra": {
+        active: true,
+        turn_order: "after_caster",
+        visible_in_timeline: true,
+        type: "ai_playable",
+        kind: "enemy",
+        id: 7,
+        tied_to_caster: true,
+        stats: {
+        }
+    },
+
+    "pixie": {
+        active: true,
+        turn_order: "after_caster",
+        visible_in_timeline: true,
+        type: "ai_playable",
+        kind: "actor",
+        id: 11,
+        tied_to_caster: true,
+        stats: {
+            default: "90%",
+            mhp: "60%",
+            mmp: "+10%"
+        }
+    }
 };
 
 /*-------------------------------------------------------------------------
@@ -289,6 +370,17 @@ Lecode.S_TBS.Config.Custom_Scopes = {
         data_left: "[cx-2,cy-2],[cx-2,cy-1],[cx-1,cy-1],[cx-2,cy],[cx-1,cy],[cx,cy],[cx-2,cy+1],[cx-1,cy+1],[cx-2,cy+2]",
         data_up: "[cx-2,cy-2],[cx-1,cy-2],[cx,cy-2],[cx+1,cy-2],[cx+2,cy-2],[cx-1,cy-1],[cx,cy-1],[cx+1,cy-1],[cx,cy]",
         data_down: "[cx,cy],[cx-1,cy+1],[cx,cy+1],[cx+1,cy+1],[cx-2,cy+2],[cx-1,cy+2],[cx,cy+2],[cx+1,cy+2],[cx+2,cy+2]"
+    },
+
+    "ice_wall": {
+        data_right: "[cx,cy-1],[cx,cy],[cx,cy+1]",
+        data_left: "[cx,cy-1],[cx,cy],[cx,cy+1]",
+        data_up: "[cx-1,cy],[cx,cy],[cx+1,cy]",
+        data_down: "[cx-1,cy],[cx,cy],[cx+1,cy]"
+    },
+
+    "ice_prison": {
+        data: "[cx-1,cy-1],[cx,cy-1],[cx+1,cy-1],[cx-1,cy],[cx+1,cy],[cx-1,cy+1],[cx,cy+1],[cx+1,cy+1]"
     }
 
 };
@@ -317,8 +409,8 @@ Lecode.S_TBS.Config.Sequences = {
     "dead": [
         "anim: user, collapse_anim",
         "play_pose: user, dead, dead",
-        "wait: 40",
-        "perform_collapse: user"
+        "wait: 40"
+        //"perform_collapse: user"
     ],
 
     "revived": [
@@ -423,6 +515,19 @@ Lecode.S_TBS.Config.Sequences = {
         "wait: 60"
     ],
 
+    "counter": [
+        "anim: user, 177, 0, true",
+        "wait: 15"
+    ],
+
+    "summon": [
+        "call: pre-skill",
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 15",
+        "summon: $1, cursor_cell",
+        "call: post-skill"
+    ],
+
     /*-------------------------------------------------------------------------
     * Your Sequences
     -------------------------------------------------------------------------*/
@@ -432,7 +537,7 @@ Lecode.S_TBS.Config.Sequences = {
         "wait: 10",
         "effects: aoe_all_battlers, current_obj, obj_anim",
         "set_speed: aoe_all_battlers, +6",
-        "push: aoe_all_battlers, user_cell, 3",
+        "push: aoe_all_battlers, user_cell, 1",
         "set_speed: aoe_all_battlers, reset",
         "wait: 60"
     ],
@@ -512,7 +617,8 @@ Lecode.S_TBS.Config.Sequences = {
     ],
 
     "fire_support": [
-        "ask_call: fire_support_attack, allies_at_distance_1_from_cursor_cell",
+        //"ask_call: fire_support_attack, allies_at_distance_1_from_cursor_cell",
+        "ask_call: fire_support_attack, allies_in_circle(1)",
         "call: skill"
     ],
 
@@ -542,6 +648,35 @@ Lecode.S_TBS.Config.Sequences = {
         "map_anim: saved(every_cell), obj_anim",
         "map_effects: saved(every_cell), current_obj, obj_anim",
         "wait: 30"
+    ],
+
+    "ice_wall": [
+        "call: pre-skill",
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 30",
+        "summon: ice_block, aoe",
+        "call: post-skill"
+    ],
+
+    "ice_prison": [
+        "call: pre-skill",
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 30",
+        "summon: ice_block, aoe",
+        "call: post-skill"
+    ],
+
+    "witch_escape": [
+        "call: pre-skill",
+        "anim: user, 129",
+        "wait: 40",
+        "save_cells: witch_escape_old, user_cell",
+        "move_to_cell: user, cursor_cell, true",
+        "anim: user, 130",
+        "wait: 60",
+        "set_cursor: saved(witch_escape_old)",
+        "look_at: user, cursor_cell",
+        "use_skill: user, 19"
     ],
 
 
@@ -624,6 +759,55 @@ Lecode.S_TBS.Config.Sequences = {
         "effects: saved(every_entity), current_obj, obj_anim"
     ],
 
+    "wind_spirit": [
+        "call: pre-skill",
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 15",
+        "summon: wind_spirit, cursor_cell",
+        "call: post-skill"
+    ],
+
+    "great_wind": [
+        "call: pre-skill",
+        "projectile: great_wind, user_cell, cursor_cell",
+        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "set_speed: aoe_all_battlers, +12",
+        "push: aoe_all_battlers, user_cell, 3",
+        "set_speed: aoe_all_battlers, reset",
+        "call: post-skill"
+    ],
+
+    "transposition": [
+        "call: pre-skill",
+        "anim: user, obj_anim",
+        "anim: aoe_all_battlers, obj_anim",
+        "wait: 40",
+        "switch_cells: user, aoe_all_battlers",
+        "call: post-skill"
+    ],
+
+    "summon_pixie": [
+        "call: pre-skill",
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 15",
+        "summon: pixie, cursor_cell",
+        "call: post-skill"
+    ],
+
+    "shamanism": [
+        "call: pre-skill",
+        "anim: aoe_all_battlers, obj_anim",
+        "wait: 20",
+        "call_for_every_entity: shamanism_effects, aoe",
+        "call: post-skill"
+    ],
+
+    "shamanism_effects": [
+        "anim: allies, 127",
+        "effects: allies, current_obj",
+        "wait: 60",
+    ],
+
     //-
 
     "fire_ball": [
@@ -644,6 +828,32 @@ Lecode.S_TBS.Config.Sequences = {
         "map_anim: cursor_cell, obj_anim",
         "wait: 20",
         "mark: anti_crystal_mark, cursor_cell"
+    ],
+
+    "mago_mark": [
+        "call: pre-skill",
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 20",
+        "mark: mago_mark, cursor_cell",
+        "wait: 60",
+        "call: post-skill"
+    ],
+
+    "rabbit_jump": [
+        "set_frame: user, atk, 0",
+        "wait: 8",
+        "map_anim: user_cell, obj_anim",
+        "jump_to_cell: user, cursor_cell",
+        "play_pose: user, atk",
+        "map_effects: user_cell, current_obj, obj_anim"
+    ],
+
+    "summon_pyra": [
+        "call: pre-skill",
+        "map_anim: cursor_cell, obj_anim",
+        "wait: 15",
+        "summon: pyra, cursor_cell",
+        "call: post-skill"
     ],
 
     //-
@@ -680,94 +890,172 @@ Lecode.S_TBS.Config.Sequences = {
 -------------------------------------------------------------------------*/
 Lecode.S_TBS.Config.AI = {
 
-    /*"default": [
-    	"if: user.isDying()",
-    		"use: heal, best, self, ignore, true",
-    		"if: user.isDying()",
-    			"use: flee, best, self, ignore, true",
-    			"move: away_enemies",
-    			"pass: look_closest_enemy",
-    		"else",
-    			"use: dmg, average, closest_enemy, keep_50%, false",
-    			"move: away_enemies",
-    			"pass: look_closest_enemy",
-    		"end",
-    	"else if: canUseHealObjs() && injuredAllyInRange(30%)",
-    		"use: heal, average, lowest_ally, ignore, true",
-    		"move: away_enemies, 60%",
-    		"pass: look_closest_enemy",
-    	"else if: canUseSupportObjs() && chance(30)",
-    		"use: support, best, random_ally, ignore, true",
-    		"move: away_enemies, 60%",
-    		"pass: look_closest_enemy",
-    	"else if: canUseDamageObjs()",
-    		"use: dmg, average, lowest_enemy, ignore, true",
-    		"move: away_enemies, 10%",
-    		"pass: look_closest_enemy",
-    	"endif"
-    ]*/
-
-    "default": [
-        "wait: 60",
-        "pass: look_closest_enemy",
-        "wait: 30",
-        "if: canUseOffense()",
-            "script: console.log('Ok')",
-        "endif",
+    BehaviorsOrder: [
+        "healing",
+        "escape",
+        "summon",
+        "support",
+        "offense" // <- Keep offense at the end, for now
     ],
 
-    "attack": [
-        "wait: 5",
-        "if: canUseOffense()",
-            "call_behavior: use_offense",
-        "else",
-            "call_behavior: cant_use_offense",
-        "endif",
+    "default": [
+        "process_behaviors",
+        "call_behavior: end_of_turn"
+    ],
+
+    "end_of_turn": [
         "wait: 5",
         "pass: look_closest_enemy"
     ],
 
-    "use_offense": [
-        "if: chance(70)",
-            "search_target: lowest_enemy, 100%",
+
+    /*-------------------------------------------------------------------------
+    * Default behaviors
+    -------------------------------------------------------------------------*/
+
+    "use_healing": [
+        "search_target: self, 100%, healing",
+        "if: !isTargetValid()",
+            "search_target: lowest_ally, 100%, healing",
             "if: !isTargetValid()",
-                "search_target: closest_enemy, 100%",
+                "search_target: closest_ally, 100%, healing",
             "endif",
-        "else",
-            "search_target: closest_enemy, 100%",
         "endif",
         "if: isTargetValid()",
-            "set_action: damage, average",
-            "if: !battlerInRange('defined_target','defined_action')",
-                "move_for_action: null",
-            "endif",
+            "set_action: healing, average",
+            "move_for_action: null",
             "use: defined_action",
-            "call_behavior: after_offense",
+            "call_behavior: after_healing",
         "else",
             "move: toward_enemies, 100%",
         "endif"
     ],
 
-    "cant_use_offense": [
-        //"script: console.log('cant use offense')",
-        "if: failureCode() === 'out_of_range'",
-            "if: chance(40)",
-                "move: toward_enemies, 80%",
+    "after_healing": [
+        "if: user.hpRate() <= 0.3",
+            "call_behavior: smart_move_away_enemies",
+        "else",
+            "call_behavior: after_offense",
+        "endif"
+    ],
+
+    "use_support": [
+        "search_target: lowest_ally, 100%, support",
+        "if: !isTargetValid()",
+            "search_target: self, 100%, support",
+            "if: !isTargetValid()",
+                "search_target: closest_ally, 100%, support",
+            "endif",
+        "endif",
+        "if: isTargetValid()",
+            "set_action: support, average",
+            "move_for_action: null",
+            "use: defined_action",
+            "call_behavior: after_support",
+        "else",
+            "move: toward_enemies, 20%",
+        "endif"
+    ],
+
+    "after_support": [
+        "if: canUseEscape()",
+            "call_behavior: escape",
+        "else",
+            "if: pattern('ranged_fighter')",
+                "move: away_enemies, 25%",
             "else",
                 "move: toward_enemies, 100%",
             "endif",
+        "endif"
+    ],
+    
+    "use_summon": [
+        "if: distanceToEnemies() > entity.getMovePoints() + 1",
+            "move: toward_enemies, 75%",
+        "endif",
+        "set_action: summon",
+        "move_for_action: null",
+        "use: defined_action",
+        "call_behavior: after_summon"
+    ],
+
+    "after_summon": [
+        "call_behavior: after_support"
+    ],
+
+    "use_offense": [
+        /*"if: chance(70)",
+            "search_target: lowest_enemy, 100%, offense",
+            "if: !isTargetValid()",
+                "search_target: closest_enemy, 100%, offense",
+            "endif",
+        "else",
+            "search_target: closest_enemy, 100%, offense",
+        "endif",*/
+        "search_target: closest_enemy, 100%, offense",
+        "if: isTargetValid()",
+            "set_action: damage, average",
+            "move_for_action: null",
+            "use: defined_action",
+            "call_behavior: after_offense",
+        "else",
+            "script: console.log('TARGET NOT VALID')",
+            "move: toward_enemies, 100%",
+        "endif"
+    ],
+
+    "cant_use_offense": [
+        "if: failureCode() === 'out_of_range'",
+            "call_behavior: out_of_range",
         "else",
             "move: away_enemies, 100%",
         "endif"
     ],
 
     "after_offense": [
-        "if: pattern('ranged_fighter')",
-            "move: away_enemies, 100%",
+        "if: canUseEscape()",
+            "call_behavior: escape",
         "else",
-            "if: !isInMeleeWith('defined_target')",
-                "move: away_enemies, 50%",
+            "if: pattern('ranged_fighter')",
+                "call_behavior: smart_move_away_enemies",
+            "else",
+                "if: !isInMeleeWith('defined_target')",
+                    "move: toward_enemies, 50%",
+                "endif",
             "endif",
         "endif"
+    ],
+
+    "out_of_range": [
+        "if: canUseRush()",
+            "set_action: move, toward",
+            "move_for_action: null",
+            "use: defined_action",
+        "endif",
+        "if: chance(40)",
+            "move: toward_enemies, 80%",
+        "else",
+            "move: toward_enemies, 100%",
+        "endif"
+    ],
+
+    "escape": [
+        "set_action: move, away",
+        "move_for_action: null",
+        "use: defined_action",
+        "wait: 10",
+        "call_behavior: smart_move_away_enemies",
+    ],
+
+    "smart_move_away_enemies": [
+        "if: distanceToEnemies() >= entity.getMovePoints() * 2",
+            "move: toward_enemies, 50%",
+        "else",
+            "move: away_enemies, 100%",
+        "endif",
     ]
+
+    /*-------------------------------------------------------------------------
+    * Your behaviors
+    -------------------------------------------------------------------------*/
 };

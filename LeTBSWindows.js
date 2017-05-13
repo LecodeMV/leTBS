@@ -3,7 +3,7 @@
 # Windows for LeTBS
 # LeTBSWindows.js
 # By Lecode
-# Version A - 1.0
+# Version A - 1.1
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
@@ -12,6 +12,7 @@
 # Version History
 #-----------------------------------------------------------------------------
 # - 1.0 : Initial release
+# - 1.1 : The tag sprite_name is correctly taken into account
 #=============================================================================
 */
 var Lecode = Lecode || {};
@@ -21,7 +22,7 @@ Lecode.S_TBS.Windows = {};
 /*:
  * @plugindesc (WIP)Version A Windows for LeTBS
  * @author Lecode
- * @version 1.0
+ * @version 1.1
  *
  * @help
  * ...
@@ -64,18 +65,6 @@ Lecode.S_TBS.Windows.itemWindowFloatRange = 20;
 Lecode.S_TBS.Windows.endCommandWindowW = "200";
 Lecode.S_TBS.Windows.endCommandWindowVisibleLines = "2";
 
-
-/*-------------------------------------------------------------------------
-* DataManager
--------------------------------------------------------------------------*/
-Lecode.S_TBS.Windows.oldDataManager_createGameObjects = DataManager.createGameObjects;
-DataManager.createGameObjects = function () {
-    Lecode.S_TBS.Windows.oldDataManager_createGameObjects.call(this);
-    $gameParty.members().forEach(function (actor) {
-        ImageManager.loadFace(actor.faceName());
-    });
-};
-
 /*-------------------------------------------------------------------------
 * Window_TBSConfirm
 -------------------------------------------------------------------------*/
@@ -98,14 +87,18 @@ Window_TBSPositioning.prototype.initialize = function () {
     Window_Selectable.prototype.initialize.call(this, 0, 0, w, h);
     this._lastIndex = 0;
     this._disabled = {};
+    this._fixedIndexes = [];
+    this.loadFaces();
+};
+
+Window_TBSPositioning.prototype.loadFaces = function() {
+    $gameParty.members().forEach(function(actor) {
+        ImageManager.loadFace(actor.faceName());
+    });
 };
 
 Window_TBSPositioning.prototype.actor = function () {
     return $gameParty.members()[this._index];
-};
-
-Window_TBSPositioning.prototype.disableItem = function (actor) {
-
 };
 
 Window_TBSPositioning.prototype.selectLast = function () {
@@ -113,11 +106,11 @@ Window_TBSPositioning.prototype.selectLast = function () {
 };
 
 Window_TBSPositioning.prototype.windowWidth = function () {
-    return this.itemFrameWidth() * this.visibleItems() + this.standardPadding() * 2;
+    return this.itemFrameWidth() + this.standardPadding() * 2;
 };
 
 Window_TBSPositioning.prototype.windowHeight = function () {
-    return this.fittingHeight(4);
+    return this.fittingHeight(4 * 3);
 };
 
 Window_TBSPositioning.prototype.itemFrameWidth = function () {
@@ -125,11 +118,11 @@ Window_TBSPositioning.prototype.itemFrameWidth = function () {
 };
 
 Window_TBSPositioning.prototype.visibleItems = function () {
-    return 4;
+    return 3;
 };
 
 Window_TBSPositioning.prototype.maxCols = function () {
-    return this.visibleItems();
+    return 1;//$gameParty.members().length;//this.visibleItems();
 };
 
 Window_TBSPositioning.prototype.maxItems = function () {
@@ -156,10 +149,30 @@ Window_TBSPositioning.prototype.enableSelection = function () {
     this._disabled[this._index] = false;
 };
 
+Window_TBSPositioning.prototype.setFixedActor = function (actor) {
+    var i = 0;
+    $gameParty.members().forEach(function(member){
+        if (member.actorId() === actor.actorId()) {
+            this._disabled[i] = true;
+            this._fixedIndexes.push(i);
+        }
+        i++;
+    }.bind(this));
+};
+
+Window_TBSPositioning.prototype.isEnabled = function(index) {
+    return !this._fixedIndexes.contains(index);
+};
+
+Window_TBSPositioning.prototype.isCurrentItemEnabled = function() {
+    return this.isEnabled(this.index());
+};
+
 Window_TBSPositioning.prototype.drawItem = function (index) {
     var actor = $gameParty.members()[index];
-    var x = this.itemFrameWidth() * index;
-    var y = 0;
+    var rect = this.itemRect(index);
+    var x = rect.x;
+    var y = rect.y;
     var w;
     this.changePaintOpacity(!this._disabled[index]);
     this.drawActorFace(actor, x, y, Window_Base._faceWidth, Window_Base._faceHeight);
@@ -172,6 +185,22 @@ Window_TBSPositioning.prototype.drawItem = function (index) {
     this.drawActorMp(actor, x, y, w);
     y += this.lineHeight();
     this.drawActorIcons(actor, x, y, Window_Base._iconWidth * 5);
+};
+
+Window_TBSPositioning.prototype.drawFace = function(faceName, faceIndex, x, y, width, height) {
+    width = width || Window_Base._faceWidth;
+    height = height || Window_Base._faceHeight;
+    var bitmap = ImageManager.loadFace(faceName);
+    var pw = Window_Base._faceWidth;
+    var ph = Window_Base._faceHeight;
+    var sw = Math.min(width, pw);
+    var sh = Math.min(height, ph);
+    var dx = Math.floor(x + Math.max(width - pw, 0) / 2);
+    var dy = Math.floor(y + Math.max(height - ph, 0) / 2);
+    var sx = faceIndex % 4 * pw + (pw - sw) / 2;
+    var sy = Math.floor(faceIndex / 4) * ph + (ph - sh) / 2;
+    bitmap.smooth = true;
+    this.contents.blt(bitmap, sx, sy, sw, sh, dx, dy);
 };
 
 Window_TBSPositioning.prototype._updateCursor = function () {
@@ -190,7 +219,13 @@ Window_TBSPositioning.prototype._updateCursor = function () {
 
 Window_TBSPositioning.prototype.cursorUp = function (wrap) {
     Window_Selectable.prototype.cursorUp.call(this, wrap);
-    this.callHandler("cursor_up");
+    if (this.index() === this.maxItems() - 1)
+        this.callHandler("exit_up");
+};
+
+Window_TBSPositioning.prototype.processOk = function() {
+    this._lastIndex = this.index();
+    Window_Selectable.prototype.processOk.call(this);
 };
 
 
@@ -200,21 +235,19 @@ Window_TBSPositioning.prototype.cursorUp = function (wrap) {
 Window_TBSPositioningConfirm.prototype = Object.create(Window_Command.prototype);
 Window_TBSPositioningConfirm.prototype.constructor = Window_TBSPositioningConfirm;
 
-Window_TBSPositioningConfirm.prototype.initialize = function () {
-    //- Create contents since textWidth is used to determine the
-    //- width of the window
-    Window_Base.prototype.initialize.call(this, 0, 0, 1, 1);
+Window_TBSPositioningConfirm.prototype.initialize = function (w) {
+    this._goalWidth = w;
     Window_Command.prototype.initialize.call(this, 0, 0);
-    this._lastCommandSymbol = null;
+    this._enabled = false;
     this.deselect();
 };
 
 Window_TBSPositioningConfirm.prototype.setEnabled = function (bool) {
-    this._list[0].enabled = bool;
+    this._enabled = !!bool;
 };
 
 Window_TBSPositioningConfirm.prototype.makeCommandList = function () {
-    this.addCommand(this.text(), 'ok', false);
+    this.addCommand(this.text(), 'ok', this._enabled );
 };
 
 Window_TBSPositioningConfirm.prototype.text = function () {
@@ -222,7 +255,7 @@ Window_TBSPositioningConfirm.prototype.text = function () {
 };
 
 Window_TBSPositioningConfirm.prototype.windowWidth = function () {
-    return Window_Base._iconWidth + 2 + this.textWidth(this.text()) + 2 + this.standardPadding() * 2;
+    return this._goalWidth;
 };
 
 Window_TBSPositioningConfirm.prototype.windowHeight = function () {
@@ -234,8 +267,11 @@ Window_TBSPositioningConfirm.prototype.numVisibleRows = function () {
 };
 
 Window_TBSPositioningConfirm.prototype.drawItem = function (index) {
-    var x = Window_Base._iconWidth + 2;
-    this.drawIcon(77, 0, 0);
+    var w = this.textWidth(this.text()) + Window_Base._iconWidth + 2;
+    var x = this.contentsWidth() / 2 - w / 2;
+    this.changePaintOpacity(this._enabled);
+    this.drawIcon(77, x, 0);
+    x += Window_Base._iconWidth + 2;
     this.leU_drawText(this.text(), x, 0);
 };
 
@@ -246,15 +282,6 @@ Window_TBSPositioningConfirm.prototype.cursorDown = function (wrap) {
 
 Window_TBSPositioningConfirm.prototype.isCursorMovable = function() {
     return this.active;
-};
-
-Window_TBSPositioningConfirm.prototype.processOk = function() {
-    this._lastCommandSymbol = this.currentSymbol();
-    Window_Command.prototype.processOk.call(this);
-};
-
-Window_TBSPositioningConfirm.prototype.selectLast = function() {
-    this.selectSymbol(this._lastCommandSymbol);
 };
 
 
@@ -342,7 +369,7 @@ Window_TBSStatus.prototype.initialize = function () {
     var y = eval(Lecode.S_TBS.Windows.statusWindowY);
     this.x = x;
     this.y = y;
-    this._battler = null;
+    this._entity = null;
     this.refresh();
 };
 
@@ -359,37 +386,33 @@ Window_TBSStatus.prototype.windowHeight = function () {
 Window_TBSStatus.prototype.refresh = function () {
     this.contents.clear();
     this.resetFontSettings();
-    if (!this._battler) return;
+    if (!this._entity) return;
     var x, y, w, h;
     //- Face
     x = 20;
     y = this.lineHeight();
-    this.drawSprite(this._battler, x, y);
+    this.drawSprite(x, y);
     //- Name
     x = Lecode.S_TBS.Windows.statusWindowSpriteBoxW;
     y = 0;
     this.contents.fontSize += 2;
     this.changeTextColor(this.systemColor());
-    this.leU_drawText(this._battler.name(), x, y);
+    this.leU_drawText(this._entity.battler().name(), x, y);
     this.contents.fontSize -= 4;
     //- HP and Gauge
     y += this.lineHeight();
-    this.drawActorHp(this._battler, x, y, 100);
+    this.drawActorHp(this._entity.battler(), x, y, 100);
     //- MP and Gauge
     y += this.lineHeight();
-    this.drawActorMp(this._battler, x, y, 100);
+    this.drawActorMp(this._entity.battler(), x, y, 100);
     // - States
     x = 2;
     var max = Lecode.S_TBS.Windows.statusWindowMaxStates;
-    this.drawActorIcons(this._battler, x, y, Window_Base._iconWidth * max);
+    this.drawActorIcons(this._entity.battler(), x, y, Window_Base._iconWidth * max);
 };
 
-Window_TBSStatus.prototype.drawSprite = function (battler, x, y) {
-    var bitmap;
-    if (battler.isActor())
-        bitmap = ImageManager.loadLeTBSStatus(battler.name() + "_Sprite");
-    else
-        bitmap = ImageManager.loadLeTBSStatus(battler.originalName() + "_Sprite");
+Window_TBSStatus.prototype.drawSprite = function (x, y) {
+    var bitmap = ImageManager.loadLeTBSStatus(this._entity.filenameID() + "_Sprite");
     var window = this;
     bitmap.addLoadListener(function () {
         var dx = eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxW) / 2 - bitmap.width / 2;

@@ -116,8 +116,8 @@ LeUtilities.getXRandomValuesInArray = function(array, x) {
 };
 
 LeUtilities.removeInArray = function(array, element) {
-    if (array.contains(element)) {
-        var index = array.indexOf(element);
+    var index = array.indexOf(element);
+    if (index > -1) {
         array.splice(index, 1);
     }
 };
@@ -761,4 +761,48 @@ LeUtilities.resetMapEvents = function() {
         }
         events[i].refresh();
     }
+};
+
+
+/*-------------------------------------------------------------------------
+* Version 2.7
+-------------------------------------------------------------------------*/
+LeUtilities.sumOfArray = function (array) {
+    if (array.length === 0) return 0;
+    return array.reduce(function(a,b){
+        return a + b;
+    });
+};
+
+LeUtilities.avgOfArray = function (array) {
+    return this.sumOfArray(array) / array.length;
+};
+LeUtilities.getMinInArrayBy = function(array,prop) {
+    return array.sort(function(a, b) {
+        return (a[prop] > b[prop]) ? 1 : ((a[prop] < b[prop]) ? -1 : 0);
+    }.bind(this))[0];
+};
+
+LeUtilities.getMaxInArrayBy = function(array,prop) {
+    return array.sort(function(a, b) {
+        return (a[prop] > b[prop]) ? 1 : ((a[prop] < b[prop]) ? -1 : 0);
+    }.bind(this)).pop();
+};
+
+
+/*-------------------------------------------------------------------------
+* Version 2.8
+-------------------------------------------------------------------------*/
+LeUtilities.hexToRgb = function(hex) {
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+};
+
+LeUtilities.doesResourceExist = function(path) {
+    var bitmap = Bitmap.load(path);
+    return !bitmap.isError();
 };

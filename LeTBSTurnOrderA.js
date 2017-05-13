@@ -3,7 +3,7 @@
 # Turn Order Visual for Lecode's TBS
 # LeTBSTurnOrderA.js
 # By Lecode
-# Version A - 1.1
+# Version A - 1.3
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
@@ -12,7 +12,8 @@
 # Version History
 #-----------------------------------------------------------------------------
 # - 1.0 : Initial release
-# - 1.1 : The visual is correctly updated when en entity is revived
+# - 1.2 : The visual is correctly updated when en entity is revived
+# - 1.3 : The tag sprite_name is correctly taken into account
 #=============================================================================
 */
 var Lecode = Lecode || {};
@@ -21,7 +22,7 @@ if (!Lecode.S_TBS)
 /*:
  * @plugindesc Version A Turn Order for LeTBS
  * @author Lecode
- * @version 1.1
+ * @version 1.3
  *
  * @help
  * ...
@@ -47,10 +48,11 @@ Lecode.S_TBS.turnOrderSpeed = 12;
 * TBSTurnOrderVisual
 -------------------------------------------------------------------------*/
 TBSTurnOrderVisual.prototype.initialize = function (layer) {
-	this._layer = layer;
+	this._mainLayer = layer;
 	this._order = [];
 	this._turnOrder = [];
 	this._activeIndex = 0;
+	this.createVisualLayer();
 	this.loadBorderBitmaps();
 };
 
@@ -61,9 +63,14 @@ TBSTurnOrderVisual.prototype.Turn = function (entity) {
 	this.miniatureSprite = null;
 };
 
+TBSTurnOrderVisual.prototype.createVisualLayer = function () {
+	this._layer = new Sprite();
+	this._mainLayer.addChild(this._layer);
+};
+
 TBSTurnOrderVisual.prototype.loadBorderBitmaps = function () {
 	this._borderOn = ImageManager.loadLeTBSTurnOrder("TurnOrder__On");
-	this._borderAlly = ImageManager.loadLeTBSTurnOrder("TurnOrder__Ally");
+	this._borderAlly = ImageManager.loadLeTBSTurnOrder("TurnOrder__Actor");
 	this._borderEnemy = ImageManager.loadLeTBSTurnOrder("TurnOrder__Enemy");
 };
 
@@ -72,7 +79,7 @@ TBSTurnOrderVisual.prototype.set = function (order) {
 	for (var i = 0; i < order.length; i++) {
 		var entity = order[i];
 		this._turnOrder.push(new this.Turn(entity));
-	};
+	}
 	this._order = order;
 	this._activeIndex = 0;
 	this.makeSprites();
@@ -100,28 +107,25 @@ TBSTurnOrderVisual.prototype.updateOnEntityDeath = function (newOrder, index) {
 };
 
 TBSTurnOrderVisual.prototype.updateOnEntityRevive = function (newOrder, index) {
-	console.log("REVIVE !");
 	this.updateOrderState();
 };
 
 TBSTurnOrderVisual.prototype.makeSprites = function () {
 	var size = Lecode.S_TBS.turnOrderSize;
+	while (this._layer.children.length > 0)
+		this._layer.removeChildAt(0);
 	for (var i = 0; i < this._turnOrder.length; i++) {
 		var turn = this._turnOrder[i];
 		if (turn.mainSprite) {
-			turn.mainSprite.removeChildAt(0);
-			turn.mainSprite.removeChildAt(0);
-			this._layer.removeChild(turn.mainSprite);
+			while (turn.mainSprite.children.length > 0)
+				turn.mainSprite.removeChildAt(0);
+			turn.mainSprite = null;
 		}
 
-		var battler = turn.entity._battler;
+		var entity = turn.entity;
 		var main = new Sprite(new Bitmap(size, size));
 		var border = new Sprite();
-		var bitmap;
-		if (battler.isActor())
-			bitmap = ImageManager.loadLeTBSTurnOrder("TurnOrder_" + battler.name());
-		else
-			bitmap = ImageManager.loadLeTBSTurnOrder("TurnOrder_" + battler.originalName());
+		var bitmap = this.getSpriteBitmap(entity);
 		var miniature = new Sprite(bitmap);
 		main.addChild(miniature);
 		main.addChild(border);
@@ -130,6 +134,10 @@ TBSTurnOrderVisual.prototype.makeSprites = function () {
 		turn.miniatureSprite = miniature;
 		this._layer.addChild(turn.mainSprite);
 	}
+};
+
+TBSTurnOrderVisual.prototype.getSpriteBitmap = function (entity) {
+	return ImageManager.loadLeTBSTurnOrder(entity.filenameID());
 };
 
 TBSTurnOrderVisual.prototype.setPositions = function () {
@@ -193,202 +201,9 @@ TBSTurnOrderVisual.prototype.updateOrderState = function () {
 };
 
 
-
-/*
-TBSTurnOrderVisual.prototype.initialize = function(layer) {
-	this._layer = layer;
-	this._turnOrder = [];
-	this._sprites = [];
-	this._phase = "";
-	this.loadBorderBitmaps();
+/*-------------------------------------------------------------------------
+* ImageManager
+-------------------------------------------------------------------------*/
+ImageManager.loadLeTBSTurnOrder = function (filename, hue) {
+    return this.loadBitmap('img/leTBS/TurnOrder/', filename, hue, true);
 };
-
-TBSTurnOrderVisual.prototype.loadBorderBitmaps = function() {
-	this._borderOn = ImageManager.loadLeTBSTurnOrder("TurnOrder__On");
-	this._borderAlly = ImageManager.loadLeTBSTurnOrder("TurnOrder__Ally");
-	this._borderEnemy = ImageManager.loadLeTBSTurnOrder("TurnOrder__Enemy");
-};
-
-TBSTurnOrderVisual.prototype.set = function(order) {
-	this._turnOrder = order.filter(function(entity){
-		return !entity._dead;
-	});
-	this._phase = "init";
-	this.makeSprites();
-};
-
-TBSTurnOrderVisual.prototype.makeSprites = function() {
-	var size = Lecode.S_TBS.turnOrderSize;
-
-	this._sprites.forEach(function(sprite) {
-		this._layer.removeChild(sprite);
-	}.bind(this));
-	this._sprites = [];
-
-	this._turnOrder.forEach(function(entity) {
-		var battler = entity._battler;
-		var main = new Sprite(new Bitmap(size, size));
-		var border = new Sprite();
-		var bitmap;
-		if(battler.isActor())
-			bitmap = ImageManager.loadLeTBSTurnOrder("TurnOrder_" + battler.name());
-		else 
-			bitmap = ImageManager.loadLeTBSTurnOrder("TurnOrder_" + battler.originalName());
-		var miniature = new Sprite(bitmap);
-		main.addChild(miniature);
-		main.addChild(border);
-		main._tbsBorder = border;
-		main._tbsMiniature = miniature;
-		this._sprites.push(main);
-		this._layer.addChild(main);
-	}.bind(this));
-	this.updateOrderState();
-	this.setStartAndDestPositions();
-};
-
-TBSTurnOrderVisual.prototype.updateOrderState = function() {
-	if (this._turnOrder.length == 0) return;
-	this._sprites[0]._tbsBorder.bitmap = this._borderOn;
-	for (var i = 1; i < this._turnOrder.length; i++) {
-		if (this._turnOrder[i]._battler.isActor())
-			this._sprites[i]._tbsBorder.bitmap = this._borderAlly;
-		else
-			this._sprites[i]._tbsBorder.bitmap = this._borderEnemy;
-	}
-};
-
-TBSTurnOrderVisual.prototype.setStartAndDestPositions = function() {
-	var pos = Lecode.S_TBS.turnOrderPos;
-	var rightMargin = Lecode.S_TBS.turnOrderRightMargin;
-	var leftMargin = Lecode.S_TBS.turnOrderLeftMargin;
-	var topMargin = Lecode.S_TBS.turnOrderTopMargin;
-	var bottomMargin = Lecode.S_TBS.turnOrderBottomMargin;
-	var size = Lecode.S_TBS.turnOrderSize;
-	var space = Lecode.S_TBS.turnOrderSpace;
-	var sx, sy, dx, dy, shiftX, shiftY;
-	switch (pos) {
-		case "right":
-			sx = Graphics.width - rightMargin - size;
-			sy = Graphics.height + size;
-			dx = sx;
-			dy = topMargin;
-			shiftX = 0;
-			shiftY = size + space;
-	}
-	for (var i = 0; i < this._sprites.length; i++) {
-		var sprite = this._sprites[i];
-		sprite.x = sx + shiftX * i;
-		sprite.y = sy + shiftY * i;
-		sprite._tbsDestX = dx + shiftX * i;
-		sprite._tbsDestY = dy + shiftY * i;
-	}
-};
-
-TBSTurnOrderVisual.prototype.updatePositions = function() {
-	var speed = Lecode.S_TBS.turnOrderSpeed;
-	this._sprites.forEach(function(sprite) {
-		sprite.leU_move(speed, sprite._tbsDestX, sprite._tbsDestY);
-	}.bind(this));
-};
-
-TBSTurnOrderVisual.prototype.updatePhase = function() {
-	if (this._phase == "init") {
-		var sprite = this._sprites[0];
-		if (sprite.x == sprite._tbsDestX && sprite.y == sprite._tbsDestY) {
-			this.showActiveSprite(sprite);
-			this._phase = "idle";
-		}
-	} else if (this._phase == "new_turn") {
-		var sprite = this._sprites.leU_last();
-		if (sprite.x == sprite._tbsDestX && sprite.y == sprite._tbsDestY) {
-			this.hideOldActiveSprite(sprite);
-			this._phase = "init";
-		}
-	}
-};
-
-TBSTurnOrderVisual.prototype.checkDeath = function() {
-	return;
-	for(var i = 0; i < this._turnOrder.length; i++) {
-		var entity = this._turnOrder[i];
-		var sprite = this._sprites[i];
-		if ( entity._dead ) {
-			sprite._tbsMiniature.setBlendColor([255,255,255,0]);
-			sprite._tbsBorder.setBlendColor([255,255,255,0]);
-		} else {
-			sprite._tbsMiniature.setBlendColor([0,0,0,0]);
-			sprite._tbsBorder.setBlendColor([0,0,0,0]);
-		}
-	}
-};
-
-TBSTurnOrderVisual.prototype.showActiveSprite = function(sprite) {
-	var pos = Lecode.S_TBS.turnOrderPos;
-	var size = Lecode.S_TBS.turnOrderSize;
-	var x = 0,
-		y = 0;
-	switch (pos) {
-		case "right":
-			x = -size / 2;
-			break;
-	}
-	sprite._tbsDestX += x;
-	sprite._tbsDestY += y;
-	sprite._tbsBorder._leU_loopFlash = true;
-	sprite._tbsBorder._leU_loopFlashData = {
-		color: [255, 255, 255, 255],
-		duration: 20
-	};
-};
-
-TBSTurnOrderVisual.prototype.updateNextTurn = function() {
-	var sprite = this._sprites.shift();
-	sprite._tbsBorder._leU_loopFlash = false;
-	this._sprites.push(sprite);
-	this._turnOrder.push(this._turnOrder.shift());
-	this.updateOrderState();
-	this._phase = "new_turn";
-	this.setPositionsForNewTurn();
-};
-
-TBSTurnOrderVisual.prototype.setPositionsForNewTurn = function() {
-	var last = this._sprites.leU_last();
-	var pos = Lecode.S_TBS.turnOrderPos;
-	var size = Lecode.S_TBS.turnOrderSize;
-	var space = Lecode.S_TBS.turnOrderSpace;
-
-	switch (pos) {
-		case "right":
-			last._tbsDestY = this._sprites[this._sprites.length - 2]._tbsDestY;
-			break;
-	}
-
-	for (var i = 0; i < this._sprites.length - 1; i++) {
-		switch (pos) {
-			case "right":
-				this._sprites[i]._tbsDestY -= (size + space);
-				break;
-		}
-	}
-};
-
-TBSTurnOrderVisual.prototype.hideOldActiveSprite = function(sprite) {
-	var pos = Lecode.S_TBS.turnOrderPos;
-	var size = Lecode.S_TBS.turnOrderSize;
-	var x = 0,
-		y = 0;
-	switch (pos) {
-		case "right":
-			x = size / 2;
-			break;
-	}
-	sprite._tbsDestX += x;
-	sprite._tbsDestY += y;
-};
-
-TBSTurnOrderVisual.prototype.update = function() {
-	this.checkDeath();
-	this.updatePositions();
-	this.updatePhase();
-};
-*/

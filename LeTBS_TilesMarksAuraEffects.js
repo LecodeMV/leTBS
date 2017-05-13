@@ -3,7 +3,7 @@
 # LeTBS: Tiles, Marks and Aura effects
 # LeTBS_TilesMarksAuraEffects.js
 # By Lecode
-# Version 1.1
+# Version 1.3
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
@@ -13,9 +13,10 @@
 #-----------------------------------------------------------------------------
 # - 1.0 : Initial release
 # - 1.1 : Fixed a bug where triggering a tile effect or a mark causes an error
-# - 1.1 : Fixed a bug where marks and tile effects don't stop battlers movement
+# - 1.2 : Fixed a bug where marks and tile effects don't stop battlers movement
 #       : When an ally dead, tied marks are removed
 #       : Added a tag for battlers to be immune to tile, mark and aura effects
+# - 1.3 : Supports the summoning system
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -26,7 +27,7 @@ Lecode.S_TBS.TilesMarksAura = {};
 /*:
  * @plugindesc Adds tiles, marks and aura effects to the core system
  * @author Lecode
- * @version 1.1
+ * @version 1.3
  *
  * @param Tile Effect Launcher
  * @desc ID of the enemy who launch terrain effects.
@@ -121,7 +122,7 @@ BattleManagerTBS.executeTileEffects = function (entity, effect, occasion, code) 
             var obj = $dataSkills[id];
             var anim = effect.play_anim ? obj.animationId : null;
             this.newAction(battler, true);
-            this.applyObjEffects(entity, obj, targets, anim, 0);
+            this.invokeObjEffects(entity, obj, targets, anim, 0);
         }
         this.wait(wait);
         return stopMovement ? 1 : 0;
@@ -211,7 +212,7 @@ BattleManagerTBS.executeMarkEffects = function (mark, entity, occasion) {
         var obj = $dataSkills[id];
         var anim = obj.animationId;
         this.newAction(mark._user.battler(), true);
-        this.applyObjEffects(mark._user, obj, targets, anim, 0);
+        this.invokeObjEffects(mark._user, obj, targets, anim, 0);
         this._marksManager.onMarkTriggered(mark);
     }
     this.wait(wait);
@@ -335,6 +336,14 @@ TBSEntity.prototype.onTurnEnd = function () {
 Lecode.S_TBS.TilesMarksAura.oldTBSEntity_teleport = TBSEntity.prototype.teleport;
 TBSEntity.prototype.teleport = function (cell) {
     Lecode.S_TBS.TilesMarksAura.oldTBSEntity_teleport.apply(this, arguments);
+    BattleManagerTBS.processTileEffectsWhenMovement(this);
+    BattleManagerTBS.processMarkEffectsWhenMovement(this);
+    BattleManagerTBS.processAurasEffectsWhenMovement();
+};
+
+Lecode.S_TBS.TilesMarksAura.oldTBSEntity_onSummoned = TBSEntity.prototype.onSummoned;
+TBSEntity.prototype.onSummoned = function (caster, stats) {
+    Lecode.S_TBS.TilesMarksAura.oldTBSEntity_onSummoned.call(this, caster, stats);
     BattleManagerTBS.processTileEffectsWhenMovement(this);
     BattleManagerTBS.processMarkEffectsWhenMovement(this);
     BattleManagerTBS.processAurasEffectsWhenMovement();
