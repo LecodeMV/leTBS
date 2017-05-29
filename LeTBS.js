@@ -13,7 +13,7 @@
 #-----------------------------------------------------------------------------
 # - 0.0 : Beta started.
 # - 0.1 : Battles start and end correctly.
-#		  Troop events are correctly triggered in battle. (mostly)
+#	      Troop events are correctly triggered in battle. (mostly)
 #		  Added an end window which appears when pressing ESC on the command window.
 #		  That window allows you to escape and change options.
 #		  Added the tags and parameters for one time move only and one time offense only.
@@ -81,6 +81,45 @@
 #         Selected cells with TouchInput on large map are correctly handled
 # - 0.61 : Optimized cells locating
 #          Added a trigger type for battle end
+# - 0.7 : Reworked the battle HUD
+#         Improved the positioning phase, you can also specify fixed actor cells
+#         The positioning phase is now correctly resumed
+#         The mouse is now correctly supported during the positioning phase
+#         Defeat is now based on actors in battle and not the whole party (bugfix)
+#         Added a minimal parameter to scopes
+#         Scopes and AoEs parameters are now evaluated
+#         Added smooth map scrolling in battle
+#         Added a parameter to hide AI's scopes
+#         Counter attacks and magic reflection are now supported
+#         Added a summon system (add-on)
+#         The system now automatically use RPT ressources (add-on)
+#         Added these sequence commands: switch_cells, use_skill
+#         Added a fast sequence system as well as arguments for sequences
+#         Added a HUD that appear on an entity when the mouse is over it (add-on)
+#         Added some tag instructions to change sprite scale, tone and hue
+#         Added a tag "has_no_corpse" to hide an entity's corpse
+#         Added states and equipment animations in battle
+#         The tag sprite_name is correctly taken into account into these components: Turn Order, Window Status
+#         The selected AoE now blinks
+#         Greatly improved targets and cells selection in sequences
+#         The AI Core is completed: all behavior are supported
+#         The AI correctly use its skills and doesn't stick with just one
+#         The AI correctly calculate the closest/farhest path to a given cell (no more stuck by obstacles)
+#         The AI uses smartly AoE skills to hit, heal or boost multiple targets
+#         The AI can use move skills to escape or reach targets
+#         The AI doesn't escape anymore if it's already too far from actors (prevents endless battles)
+#         Added a parameter to define how much AI should try to escape (prevents endless battles)
+#         The AI now handles confusion states
+#         Added a parameter so delay AI calculation rate, in order to prevent freezes
+#         Added a configuration tag for AI
+#         Fixed a bug where collapse effects are triggered multiple times
+#         Projectiles are now summoned for each cell in the AoE
+#         The turn order is now correctly determined
+#         Command, Skill and Item windows are now correctly positioned
+#         Skills can now directly alter move points
+#         Move points popup is now added
+#         Fixed a bug where triggering tiles and mark effects change the next
+#         action damage
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -93,7 +132,8 @@ Lecode.S_TBS = {};
  * @author Lecode
  * @version 0.61
 *
-* @param Ally Color Cell
+*
+* @param Actor Color Cell
 * @desc Color of actor cells.
 * @default #0FC50B
 *
@@ -102,7 +142,7 @@ Lecode.S_TBS = {};
 * @default #C50B1B
 *
 * @param Cell Opacity Color
-* @desc Opacity of the placement cells.
+* @desc Opacity of the positioning cells.
 * @default 175
 *
 * @param Placed Animation
@@ -197,6 +237,10 @@ Lecode.S_TBS = {};
 * @desc Opacity of the move scope when cells are selected.
 * @default 255
 *
+* @param Selected Move Scope Color
+* @desc Color of the selected move scope.
+* @default #81F7F3
+*
 * @param Enable Directional Facing
 * @desc Battlers will be allowed to change their direction.
 * @default true
@@ -223,7 +267,7 @@ Lecode.S_TBS = {};
 *
 * @param Attack Scope Color
 * @desc Color of the attack scope.
-* @default #DF3A01
+* @default #E20F2B
 *
 * @param Attack Scope Opacity
 * @desc Opacity of the attack scope.
@@ -232,6 +276,10 @@ Lecode.S_TBS = {};
 * @param Invalid Attack Scope Opacity
 * @desc Opacity of the attack scope when cells are invalid.
 * @default 60
+*
+* @param Selected Attack Scope Color
+* @desc Color of the attack scope.
+* @default #FB3B54
 *
 * @param Selected Attack Scope Opacity
 * @desc Opacity of the attack scope when cells are selected.
@@ -255,7 +303,7 @@ Lecode.S_TBS = {};
 *
 * @param Skill Scope Color
 * @desc Color of the skill scope.
-* @default #DF3A01
+* @default #E20F2B
 *
 * @param Skill Scope Opacity
 * @desc Opacity of the skill scope.
@@ -264,6 +312,10 @@ Lecode.S_TBS = {};
 * @param Invalid Skill Scope Opacity
 * @desc Opacity of the skill scope when cells are invalid.
 * @default 60
+*
+* @param Selected Skill Scope Color
+* @desc Color of the selected skill scope.
+* @default #FB3B54
 *
 * @param Selected Skill Scope Opacity
 * @desc Opacity of the skill scope when cells are selected.
@@ -296,6 +348,10 @@ Lecode.S_TBS = {};
 * @param Invalid Item Scope Opacity
 * @desc Opacity of the item scope when cells are invalid.
 * @default 60
+*
+* @param Selected Item Scope Color
+* @desc Color of selected the item scope.
+* @default #F969F4
 *
 * @param Selected Item Scope Opacity
 * @desc Opacity of the item scope when cells are selected.
@@ -353,6 +409,22 @@ Lecode.S_TBS = {};
 * @desc AI wait time.
 * @default 5
 *
+* @param Show Scopes
+* @desc ...
+* @default false
+*
+* @param Escape Cooldown
+* @desc ...
+* @default 2
+*
+* @param Support Cooldown
+* @desc ...
+* @default 1
+*
+* @param Ai Process Delay
+* @desc ...
+* @default 5
+*
 * @param -- Actions Restrictions --
 * @desc ...
 * @default 
@@ -385,6 +457,7 @@ Lecode.S_TBS = {};
 * @desc Default collapse animation.
 * @default 136
 *
+*
  * @help
  * See the documentation
  */
@@ -396,82 +469,88 @@ Lecode.S_TBS = {};
 -------------------------------------------------------------------------*/
 var parameters = PluginManager.parameters('LeTBS');
 
-Lecode.S_TBS.allyColorCell = String(parameters["Ally Color Cell"] || "#0FC50B");	//	(): Color of actor cells.
-Lecode.S_TBS.enemyColorCell = String(parameters["Enemy Color Cell"] || "#C50B1B");	//	(): Color of enemy cells.
-Lecode.S_TBS.placementCellOpacity = Number(parameters["Cell Opacity Color"] || 175);	//	(Cell Opacity Color): Opacity of the placement cells.
-Lecode.S_TBS.placedBattlerAnim = Number(parameters["Placed Animation"] || 124);	//	(Placed Animation): Animation ID when a battler is placed.
-Lecode.S_TBS.instantiateAll = String(parameters["Instantiate All"] || 'true') === 'true';	//	(): Instantiate all enemies at the same time.
-Lecode.S_TBS.displayStartMessages = String(parameters["Display Start Messages"] || 'false') === 'true';	//	(): Show start messages ?
+Lecode.S_TBS.actorColorCell = String(parameters["Actor Color Cell"] || "#0FC50B")	;	//	(): Color of actor cells.
+Lecode.S_TBS.enemyColorCell = String(parameters["Enemy Color Cell"] || "#C50B1B")	;	//	(): Color of enemy cells.
+Lecode.S_TBS.positioningCellOpacity = Number(parameters["Cell Opacity Color"] || 175)	;	//	(Cell Opacity Color): Opacity of the positioning cells.
+Lecode.S_TBS.placedBattlerAnim = Number(parameters["Placed Animation"] || 124)	;	//	(Placed Animation): Animation ID when a battler is placed.
+Lecode.S_TBS.instantiateAll = String(parameters["Instantiate All"] || 'true') === 'true'	;	//	(): Instantiate all enemies at the same time.
+Lecode.S_TBS.displayStartMessages = String(parameters["Display Start Messages"] || 'false') === 'true'	;	//	(): Show start messages ?
 // Divider: -- Misc --
-Lecode.S_TBS.explorationInput = String(parameters["Exploration Input"] || "shift");	//	(): Input to trigger exploration.
-Lecode.S_TBS.opacityInput = String(parameters["Opacity Input"] || "control");	//	(): Input to change windows' opacity.
-Lecode.S_TBS.minInputOpacity = Number(parameters["Min Input Opacity"] || 0);	//	(): Minimum opacity of windows.
-Lecode.S_TBS.inputOpacityDecreaseSteps = Number(parameters["Opacity Steps"] || 10);	//	(Opacity Steps): Value of opacity to reduce when inputed.
-Lecode.S_TBS.battleStartSpriteDelay = Number(parameters["Battle Start Sprite Delay"] || 50);	//	(): Duration of the battle start sprite.
-Lecode.S_TBS.turnOrderFairRepartition = String(parameters["Turn Order Fair Repartition ?"] || 'true') === 'true';	//	(Turn Order Fair Repartition ?): Allow a fair repartition of the turn order ?
-Lecode.S_TBS.destinationDuration = Number(parameters["Destination Duration"] || 60);	//	(): Duration of the destination sprite (when a cell is selected).
+Lecode.S_TBS.explorationInput = String(parameters["Exploration Input"] || "shift")	;	//	(): Input to trigger exploration.
+Lecode.S_TBS.opacityInput = String(parameters["Opacity Input"] || "control")	;	//	(): Input to change windows' opacity.
+Lecode.S_TBS.minInputOpacity = Number(parameters["Min Input Opacity"] || 0)	;	//	(): Minimum opacity of windows.
+Lecode.S_TBS.inputOpacityDecreaseSteps = Number(parameters["Opacity Steps"] || 10)	;	//	(Opacity Steps): Value of opacity to reduce when inputed.
+Lecode.S_TBS.battleStartSpriteDelay = Number(parameters["Battle Start Sprite Delay"] || 50)	;	//	(): Duration of the battle start sprite.
+Lecode.S_TBS.turnOrderFairRepartition = String(parameters["Turn Order Fair Repartition ?"] || 'true') === 'true'	;	//	(Turn Order Fair Repartition ?): Allow a fair repartition of the turn order ?
+Lecode.S_TBS.destinationDuration = Number(parameters["Destination Duration"] || 60)	;	//	(): Duration of the destination sprite (when a cell is selected).
 // Divider: -- Scopes --
-Lecode.S_TBS.scopeCellWidth = Number(parameters["Scope Cell Width"] || 46);	//	(): Width of cells.
-Lecode.S_TBS.scopeCellHeight = Number(parameters["Scope Cell Height"] || 46);	//	(): Height of cells. 
-Lecode.S_TBS.obstacleRegionId = Number(parameters["Obstacle Region Id"] || 250);	//	(): Region ID for obstacles.
-Lecode.S_TBS.freeObstacleRegionId = Number(parameters["Free Obstacle Region Id"] || 249);	//	(): Region ID for non-blocking los obstacles.
+Lecode.S_TBS.scopeCellWidth = Number(parameters["Scope Cell Width"] || 46)	;	//	(): Width of cells.
+Lecode.S_TBS.scopeCellHeight = Number(parameters["Scope Cell Height"] || 46)	;	//	(): Height of cells. 
+Lecode.S_TBS.obstacleRegionId = Number(parameters["Obstacle Region Id"] || 250)	;	//	(): Region ID for obstacles.
+Lecode.S_TBS.freeObstacleRegionId = Number(parameters["Free Obstacle Region Id"] || 249)	;	//	(): Region ID for non-blocking los obstacles.
 // Divider: -- Move Action --
-Lecode.S_TBS.defaultMoveScope = String(parameters["Default Move Scope"] || "circle(_mp_)");	//	(): Default move scope data.
-Lecode.S_TBS.defaultMovePoints = Number(parameters["Default Move Points"] || 3);	//	(): Default amount of move points.
-Lecode.S_TBS.moveColorCell = String(parameters["Move Scope Color"] || "#0A5C85");	//	(Move Scope Color): Color of the move scope.
-Lecode.S_TBS.moveCellOpacity = Number(parameters["Move Scope Opacity"] || 175);	//	(Move Scope Opacity): Opacity of the move scope.
-Lecode.S_TBS.moveInvalidCellOpacity = Number(parameters["Invalid Move Scope Opacity"] || 60);	//	(Invalid Move Scope Opacity): Opacity of the move scope when cells are invalid.
-Lecode.S_TBS.moveSelectedCellOpacity = Number(parameters["Selected Move Scope Opacity"] || 255);	//	(Selected Move Scope Opacity): Opacity of the move scope when cells are selected.
-Lecode.S_TBS.enableDirectionalFacing = String(parameters["Enable Directional Facing"] || 'true') === 'true';	//	(): Battlers will be allowed to change their direction.
+Lecode.S_TBS.defaultMoveScope = String(parameters["Default Move Scope"] || "circle(_mp_)")	;	//	(): Default move scope data.
+Lecode.S_TBS.defaultMovePoints = Number(parameters["Default Move Points"] || 3)	;	//	(): Default amount of move points.
+Lecode.S_TBS.moveColorCell = String(parameters["Move Scope Color"] || "#0A5C85")	;	//	(Move Scope Color): Color of the move scope.
+Lecode.S_TBS.moveCellOpacity = Number(parameters["Move Scope Opacity"] || 175)	;	//	(Move Scope Opacity): Opacity of the move scope.
+Lecode.S_TBS.moveInvalidCellOpacity = Number(parameters["Invalid Move Scope Opacity"] || 60)	;	//	(Invalid Move Scope Opacity): Opacity of the move scope when cells are invalid.
+Lecode.S_TBS.moveSelectedCellOpacity = Number(parameters["Selected Move Scope Opacity"] || 255)	;	//	(Selected Move Scope Opacity): Opacity of the move scope when cells are selected.
+Lecode.S_TBS.selectedMoveColorCell = String(parameters["Selected Move Scope Color"] || "#81F7F3")	;	//	(Selected Move Scope Color): Color of the selected move scope.
+Lecode.S_TBS.enableDirectionalFacing = String(parameters["Enable Directional Facing"] || 'true') === 'true'	;	//	(): Battlers will be allowed to change their direction.
 // Divider: -- Attack Action --
-Lecode.S_TBS.defaultAttackAnimation = Number(parameters["Default Attack Animation"] || 1);	//	(): Default attack animation.
-Lecode.S_TBS.defaultAttackSequence = String(parameters["Default Attack Sequence"] || "atk");	//	(): Default attack sequence.
-Lecode.S_TBS.defaultAttackScope = String(parameters["Default Attack Scope"] || "circle(1)");	//	(): Default attack scope data.
-Lecode.S_TBS.defaultAttackAoE = String(parameters["Default Attack Ao E"] || "circle(0)");	//	(): Default attack aoe data.
-Lecode.S_TBS.attackColorCell = String(parameters["Attack Scope Color"] || "#DF3A01");	//	(Attack Scope Color): Color of the attack scope.
-Lecode.S_TBS.attackCellOpacity = Number(parameters["Attack Scope Opacity"] || 175);	//	(Attack Scope Opacity): Opacity of the attack scope.
-Lecode.S_TBS.attackInvalidCellOpacity = Number(parameters["Invalid Attack Scope Opacity"] || 60);	//	(Invalid Attack Scope Opacity): Opacity of the attack scope when cells are invalid.
-Lecode.S_TBS.attackSelectedCellOpacity = Number(parameters["Selected Attack Scope Opacity"] || 255);	//	(Selected Attack Scope Opacity): Opacity of the attack scope when cells are selected.
+Lecode.S_TBS.defaultAttackAnimation = Number(parameters["Default Attack Animation"] || 1)	;	//	(): Default attack animation.
+Lecode.S_TBS.defaultAttackSequence = String(parameters["Default Attack Sequence"] || "atk")	;	//	(): Default attack sequence.
+Lecode.S_TBS.defaultAttackScope = String(parameters["Default Attack Scope"] || "circle(1)")	;	//	(): Default attack scope data.
+Lecode.S_TBS.defaultAttackAoE = String(parameters["Default Attack Ao E"] || "circle(0)")	;	//	(): Default attack aoe data.
+Lecode.S_TBS.attackColorCell = String(parameters["Attack Scope Color"] || "#E20F2B")	;	//	(Attack Scope Color): Color of the attack scope.
+Lecode.S_TBS.attackCellOpacity = Number(parameters["Attack Scope Opacity"] || 175)	;	//	(Attack Scope Opacity): Opacity of the attack scope.
+Lecode.S_TBS.attackInvalidCellOpacity = Number(parameters["Invalid Attack Scope Opacity"] || 60)	;	//	(Invalid Attack Scope Opacity): Opacity of the attack scope when cells are invalid.
+Lecode.S_TBS.selectedAttackColorCell = String(parameters["Selected Attack Scope Color"] || "#FB3B54")	;	//	(Selected Attack Scope Color): Color of the attack scope.
+Lecode.S_TBS.attackSelectedCellOpacity = Number(parameters["Selected Attack Scope Opacity"] || 255)	;	//	(Selected Attack Scope Opacity): Opacity of the attack scope when cells are selected.
 // Divider: -- Skill Action --
-Lecode.S_TBS.defaultSkillSequence = String(parameters["Default Skill Sequence"] || "skill");	//	(): Default skill sequence.
-Lecode.S_TBS.defaultSkillScope = String(parameters["Default Skill Scope"] || "circle(3)");	//	(): Default skill scope data.
-Lecode.S_TBS.defaultSkillAoE = String(parameters["Default Skill Ao E"] || "circle(0)");	//	(): Default skill aoe data.
-Lecode.S_TBS.skillColorCell = String(parameters["Skill Scope Color"] || "#DF3A01");	//	(Skill Scope Color): Color of the skill scope.
-Lecode.S_TBS.skillCellOpacity = Number(parameters["Skill Scope Opacity"] || 175);	//	(Skill Scope Opacity): Opacity of the skill scope.
-Lecode.S_TBS.skillInvalidCellOpacity = Number(parameters["Invalid Skill Scope Opacity"] || 60);	//	(Invalid Skill Scope Opacity): Opacity of the skill scope when cells are invalid.
-Lecode.S_TBS.skillSelectedCellOpacity = Number(parameters["Selected Skill Scope Opacity"] || 255);	//	(Selected Skill Scope Opacity): Opacity of the skill scope when cells are selected.
+Lecode.S_TBS.defaultSkillSequence = String(parameters["Default Skill Sequence"] || "skill")	;	//	(): Default skill sequence.
+Lecode.S_TBS.defaultSkillScope = String(parameters["Default Skill Scope"] || "circle(3)")	;	//	(): Default skill scope data.
+Lecode.S_TBS.defaultSkillAoE = String(parameters["Default Skill Ao E"] || "circle(0)")	;	//	(): Default skill aoe data.
+Lecode.S_TBS.skillColorCell = String(parameters["Skill Scope Color"] || "#E20F2B")	;	//	(Skill Scope Color): Color of the skill scope.
+Lecode.S_TBS.skillCellOpacity = Number(parameters["Skill Scope Opacity"] || 175)	;	//	(Skill Scope Opacity): Opacity of the skill scope.
+Lecode.S_TBS.skillInvalidCellOpacity = Number(parameters["Invalid Skill Scope Opacity"] || 60)	;	//	(Invalid Skill Scope Opacity): Opacity of the skill scope when cells are invalid.
+Lecode.S_TBS.selectedSkillColorCell = String(parameters["Selected Skill Scope Color"] || "#FB3B54")	;	//	(Selected Skill Scope Color): Color of the selected skill scope.
+Lecode.S_TBS.skillSelectedCellOpacity = Number(parameters["Selected Skill Scope Opacity"] || 255)	;	//	(Selected Skill Scope Opacity): Opacity of the skill scope when cells are selected.
 // Divider: -- Item Action --
-Lecode.S_TBS.defaultItemSequence = String(parameters["Default Item Sequence"] || "item");	//	(): Default item sequence.
-Lecode.S_TBS.defaultItemScope = String(parameters["Default Item Scope"] || "circle(3)");	//	(): Default item scope data.
-Lecode.S_TBS.defaultItemAoE = String(parameters["Default Item Ao E"] || "circle(0)");	//	(): Default item aoe data.
-Lecode.S_TBS.ItemColorCell = String(parameters["Item Scope Color"] || "#DF01D7");	//	(Item Scope Color): Color of the item scope.
-Lecode.S_TBS.ItemCellOpacity = Number(parameters["Item Scope Opacity"] || 175);	//	(Item Scope Opacity): Opacity of the item scope.
-Lecode.S_TBS.ItemInvalidCellOpacity = Number(parameters["Invalid Item Scope Opacity"] || 60);	//	(Invalid Item Scope Opacity): Opacity of the item scope when cells are invalid.
-Lecode.S_TBS.ItemSelectedCellOpacity = Number(parameters["Selected Item Scope Opacity"] || 255);	//	(Selected Item Scope Opacity): Opacity of the item scope when cells are selected.
+Lecode.S_TBS.defaultItemSequence = String(parameters["Default Item Sequence"] || "item")	;	//	(): Default item sequence.
+Lecode.S_TBS.defaultItemScope = String(parameters["Default Item Scope"] || "circle(3)")	;	//	(): Default item scope data.
+Lecode.S_TBS.defaultItemAoE = String(parameters["Default Item Ao E"] || "circle(0)")	;	//	(): Default item aoe data.
+Lecode.S_TBS.ItemColorCell = String(parameters["Item Scope Color"] || "#DF01D7")	;	//	(Item Scope Color): Color of the item scope.
+Lecode.S_TBS.ItemCellOpacity = Number(parameters["Item Scope Opacity"] || 175)	;	//	(Item Scope Opacity): Opacity of the item scope.
+Lecode.S_TBS.ItemInvalidCellOpacity = Number(parameters["Invalid Item Scope Opacity"] || 60)	;	//	(Invalid Item Scope Opacity): Opacity of the item scope when cells are invalid.
+Lecode.S_TBS.selectedItemColorCell = String(parameters["Selected Item Scope Color"] || "#F969F4")	;	//	(Selected Item Scope Color): Color of selected the item scope.
+Lecode.S_TBS.ItemSelectedCellOpacity = Number(parameters["Selected Item Scope Opacity"] || 255)	;	//	(Selected Item Scope Opacity): Opacity of the item scope when cells are selected.
 // Divider: -- Directional Damage --
-Lecode.S_TBS.backDirectionalDamageEffects = Number(parameters["Back Directional Damage Effects"] || 15);	//	(): Damage % when a battler is hit on the back.
-Lecode.S_TBS.sideDirectionalDamageEffects = Number(parameters["Side Directional Damage Effects"] || 0);	//	(): Damage % when a battler is hit on the sides.
-Lecode.S_TBS.faceDirectionalDamageEffects = Number(parameters["Face Directional Damage Effects"] || -10);	//	(): Damage % when a battler is hit on the face.
+Lecode.S_TBS.backDirectionalDamageEffects = Number(parameters["Back Directional Damage Effects"] || 15)	;	//	(): Damage % when a battler is hit on the back.
+Lecode.S_TBS.sideDirectionalDamageEffects = Number(parameters["Side Directional Damage Effects"] || 0)	;	//	(): Damage % when a battler is hit on the sides.
+Lecode.S_TBS.faceDirectionalDamageEffects = Number(parameters["Face Directional Damage Effects"] || -10)	;	//	(): Damage % when a battler is hit on the face.
 // Divider: -- Collision Damage --
-Lecode.S_TBS.defaultCollisionFormula = String(parameters["Default Collision Formula"] || "b.mhp * 0.05 * (distance-covered)");	//	(): Formula to evaluate collision damage.
-Lecode.S_TBS.collissionDamageChainRate = Number(parameters["Collission Damage Chain Rate"] || 0.3);	//	(): Collision damage chain rate.
+Lecode.S_TBS.defaultCollisionFormula = String(parameters["Default Collision Formula"] || "b.mhp * 0.05 * (distance-covered)")	;	//	(): Formula to evaluate collision damage.
+Lecode.S_TBS.collissionDamageChainRate = Number(parameters["Collission Damage Chain Rate"] || 0.3)	;	//	(): Collision damage chain rate.
 // Divider: -- Motions --
-Lecode.S_TBS.battlersMoveSpeed = Number(parameters["Battlers Move Speed"] || 4);	//	(): Default move speed.
-Lecode.S_TBS.battlersFrameDelay = Number(parameters["Battlers Frame Delay"] || 10);	//	(): Default delay value between sprites frames.
+Lecode.S_TBS.battlersMoveSpeed = Number(parameters["Battlers Move Speed"] || 4)	;	//	(): Default move speed.
+Lecode.S_TBS.battlersFrameDelay = Number(parameters["Battlers Frame Delay"] || 10)	;	//	(): Default delay value between sprites frames.
 // Divider: -- AI --
-Lecode.S_TBS.defaultAiPattern = String(parameters["Default Ai Pattern"] || "melee_fighter");	//	(): Default AI pattern.
-Lecode.S_TBS.aiWaitTime = Number(parameters["Ai Wait Time"] || 5);	//	(): AI wait time.
+Lecode.S_TBS.defaultAiPattern = String(parameters["Default Ai Pattern"] || "melee_fighter")	;	//	(): Default AI pattern.
+Lecode.S_TBS.aiWaitTime = Number(parameters["Ai Wait Time"] || 5)	;	//	(): AI wait time.
+Lecode.S_TBS.showScopes = String(parameters["Show Scopes"] || 'false') === 'true';
+Lecode.S_TBS.escapeCooldown = Number(parameters["Escape Cooldown"] || 2);
+Lecode.S_TBS.supportCooldown = Number(parameters["Support Cooldown"] || 1);
+Lecode.S_TBS.aiProcessDelay = Number(parameters["Ai Process Delay"] || 5);
 // Divider: -- Actions Restrictions --
-Lecode.S_TBS.oneTimeMove = String(parameters["One Time Move"] || 'false') === 'true';	//	(): Enable the one time move feature. (See doc)
-Lecode.S_TBS.oneTimeOffense = String(parameters["One Time Offense"] || 'true') === 'true';	//	(): Enable the one time offense feature. (See doc)
-Lecode.S_TBS.autoPass = String(parameters["Auto Pass"] || 'true') === 'true';	//	(): Enable the auto pass feature. (See doc)
+Lecode.S_TBS.oneTimeMove = String(parameters["One Time Move"] || 'false') === 'true'	;	//	(): Enable the one time move feature. (See doc)
+Lecode.S_TBS.oneTimeOffense = String(parameters["One Time Offense"] || 'true') === 'true'	;	//	(): Enable the one time offense feature. (See doc)
+Lecode.S_TBS.autoPass = String(parameters["Auto Pass"] || 'true') === 'true'	;	//	(): Enable the auto pass feature. (See doc)
 // Divider: -- Battle End --
-Lecode.S_TBS.escapeSound = String(parameters["Escape Sound"] || "Buzzer2");	//	(): Sound when the party try to escape.
-Lecode.S_TBS.endOfBattleWait = Number(parameters["End Of Battle Wait"] || 60);	//	(): Wait amount before the end of the battle.
-Lecode.S_TBS.collapseAnimation = Number(parameters["Collapse Animation"] || 136);	//	(): Default collapse animation.
+Lecode.S_TBS.escapeSound = String(parameters["Escape Sound"] || "Buzzer2")	;	//	(): Sound when the party try to escape.
+Lecode.S_TBS.endOfBattleWait = Number(parameters["End Of Battle Wait"] || 60)	;	//	(): Wait amount before the end of the battle.
+Lecode.S_TBS.collapseAnimation = Number(parameters["Collapse Animation"] || 136)	;	//	(): Default collapse animation.
 
-
-Lecode.S_TBS.drawLimits = false;
 
 /*-------------------------------------------------------------------------
 * Spriteset_BattleTBS
@@ -485,6 +564,7 @@ Spriteset_BattleTBS.prototype.constructor = Spriteset_BattleTBS;
 
 Spriteset_BattleTBS.prototype.initialize = function () {
     Spriteset_Map.prototype.initialize.call(this);
+    this.createTBSLayer();
     this.createBattleLayers();
 };
 
@@ -500,46 +580,62 @@ Spriteset_BattleTBS.prototype.createCharacters = function () {
     }
 };
 
+Spriteset_BattleTBS.prototype.createTBSLayer = function () {
+    this._tbsLayer = new Sprite();
+    this._tbsLayer.x = this._tilemap.x;
+    this._tbsLayer.y = this._tilemap.y;
+    this._tbsLayer.width = this._tilemap.width;
+    this._tbsLayer.height = this._tilemap.height;
+    this._baseSprite.addChild(this._tbsLayer);
+};
+
 Spriteset_BattleTBS.prototype.createBattleLayers = function () {
     //-Scopes
     this._scopesLayer = new TBSScopeLayer();
     this._scopesLayer.z = 1;
-    this._tilemap.addChild(this._scopesLayer);
+    this._tbsLayer.addChild(this._scopesLayer);
     this._scopesLayer.createSelectionLayer();
     //-Ground entities
     this._groundEntitiesLayer = new Sprite();
     this._groundEntitiesLayer.z = 1;
-    this._tilemap.addChild(this._groundEntitiesLayer);
+    this._tbsLayer.addChild(this._groundEntitiesLayer);
     //-Ground
     this._groundLayer = new Sprite();
     this._groundLayer.z = 2;
-    this._tilemap.addChild(this._groundLayer);
+    this._tbsLayer.addChild(this._groundLayer);
     //-Battlers
     this._battlersLayer = new Sprite();
     this._battlersLayer.z = 3;
-    this._tilemap.addChild(this._battlersLayer);
+    this._tbsLayer.addChild(this._battlersLayer);
     //-Animations
     this._animationsLayer = new TBSMapAnimation();
     this._animationsLayer.z = 4;
-    this._tilemap.addChild(this._animationsLayer);
+    this._tbsLayer.addChild(this._animationsLayer);
     //-Movable Info
     this._movableInfoLayer = new Sprite();
     this._movableInfoLayer.z = 6;
-    this._tilemap.addChild(this._movableInfoLayer);
+    this._tbsLayer.addChild(this._movableInfoLayer);
     //-Fixed Info
     this._fixedInfoLayer = new Sprite();
     this._fixedInfoLayer.z = 6;
-    this._tilemap.addChild(this._fixedInfoLayer);
+    this._baseSprite.addChild(this._fixedInfoLayer);
     //-Debug
     var bitmap = new Bitmap(Graphics.width, Graphics.height);
     this._debugLayer = new Sprite(bitmap);
     this._debugLayer.z = 7;
-    this._tilemap.addChild(this._debugLayer);
+    this._tbsLayer.addChild(this._debugLayer);
 };
 
 Spriteset_BattleTBS.prototype.update = function () {
     Spriteset_Map.prototype.update.call(this);
     this.updateEntitiesZ();
+};
+
+Spriteset_BattleTBS.prototype.updateTilemap = function () {
+    Spriteset_Map.prototype.updateTilemap.call(this);
+    if (!this._tbsLayer) return;
+    this._tbsLayer.x = -$gameMap.displayX() * $gameMap.tileWidth();
+    this._tbsLayer.y = -$gameMap.displayY() * $gameMap.tileHeight();
 };
 
 Spriteset_BattleTBS.prototype.updateEntitiesZ = function () {
@@ -569,6 +665,7 @@ TBSScopeLayer.prototype.initialize = function () {
     var bitmap = new Bitmap(w, h);
     Sprite.prototype.initialize.call(this, bitmap);
     this._selectionLayer = null;
+    this._selectionCells = [];
 };
 
 TBSScopeLayer.prototype.createSelectionLayer = function () {
@@ -580,8 +677,8 @@ TBSScopeLayer.prototype.createSelectionLayer = function () {
 TBSScopeLayer.prototype.update = function () {
     Sprite.prototype.update.call(this);
     if (this._selectionLayer) {
-        this._selectionLayer.x = this.x;
-        this._selectionLayer.y = this.y;
+        //this._selectionLayer.x = this.x;
+        //this._selectionLayer.y = this.y;
     }
 };
 
@@ -591,6 +688,7 @@ TBSScopeLayer.prototype.clear = function () {
 
 TBSScopeLayer.prototype.clearSelection = function () {
     this._selectionLayer.clear();
+    this._selectionLayer.leU_endLoopFlash();
 };
 
 TBSScopeLayer.prototype.drawCell = function (x, y, opacity, color) {
@@ -606,8 +704,36 @@ TBSScopeLayer.prototype.drawCell = function (x, y, opacity, color) {
     this.bitmap.fillRect(sx, sy, w, h, color);
 };
 
+TBSScopeLayer.prototype.drawSelectionCells = function (scope, opacity, color, scolor) {
+    var boundaries = BattleManagerTBS.getScopeBoundaries(scope);
+    var w = (Math.abs(boundaries.right - boundaries.left) + 1) * $gameMap.tileWidth();
+    var h = (Math.abs(boundaries.top - boundaries.bottom) + 1) * $gameMap.tileHeight();
+    var x = boundaries.left * $gameMap.tileWidth();
+    var y = boundaries.top * $gameMap.tileHeight();
+    this._selectionLayer.bitmap = new Bitmap(w, h);
+    this._selectionLayer.paintOpacity = opacity;
+    this._selectionLayer.x = x;
+    this._selectionLayer.y = y;
+    scope.forEach(function (cell) {
+        w = Lecode.S_TBS.scopeCellWidth;
+        h = Lecode.S_TBS.scopeCellHeight;
+        var sx = $gameMap.tileWidth() - w;
+        var sy = $gameMap.tileHeight() - h;
+        w -= sx;
+        h -= sy;
+        var cx = cell.x - boundaries.left;
+        var cy = cell.y - boundaries.top;
+        sx += cx * $gameMap.tileWidth();
+        sy += cy * $gameMap.tileHeight();
+        this._selectionLayer.bitmap.fillRect(sx, sy, w, h, scolor);
+    }.bind(this));
+    this._selectionLayer.leU_startLoopFlash([0, 0, 0, 255], 25);
+    this._selectionLayer.leU_setFlashMode("opacity");
+};
+
 TBSScopeLayer.prototype.drawSelectionCell = function (x, y, opacity, color) {
     this._selectionLayer.drawCell(x, y, opacity, color);
+    //this._selectionCells.push({ x: x, y: y, op: opacity, color: color });
 };
 
 
@@ -692,7 +818,43 @@ Sprite_TBSAnimation.prototype.updatePosition = function () {
             this.y += h / 2;
         else if (this._animation.position === 0)
             this.y -= h / 2;
+    }
+};
 
+
+/*-------------------------------------------------------------------------
+* Sprite_TBSEntityAnimation
+-------------------------------------------------------------------------*/
+function Sprite_TBSEntityAnimation() {
+    this.initialize.apply(this, arguments);
+}
+
+Sprite_TBSEntityAnimation.prototype = Object.create(Sprite_TBSAnimation.prototype);
+Sprite_TBSEntityAnimation.prototype.constructor = Sprite_TBSEntityAnimation;
+
+Sprite_TBSEntityAnimation.prototype.initialize = function () {
+    Sprite_TBSAnimation.prototype.initialize.call(this);
+};
+
+Sprite_TBSEntityAnimation.prototype.setup = function (target, animation, mirror, delay, cell) {
+    Sprite_TBSAnimation.prototype.setup.call(this, target, animation, mirror, delay, cell);
+    this.updatePosition();
+};
+
+Sprite_TBSEntityAnimation.prototype.updatePosition = function () {
+    if (this._animation.position === 3) {
+        this.x = this.parent.width / 2;
+        this.y = this.parent.height / 2;
+    } else {
+        var bounds = this._target.getBounds();
+        var w = bounds.width;
+        var h = bounds.height;
+        this.x = this._target.x + w / 2;
+        this.y = this._target.y + h / 2;
+        if (this._animation.position === 2)
+            this.y += h / 2;
+        else if (this._animation.position === 0)
+            this.y -= h / 2;
     }
 };
 
@@ -729,14 +891,22 @@ Scene_Battle.prototype.start = function () {
 
         BattleManager.playBattleBgm();
         BattleManagerTBS._spriteset = this._spriteset;
+        BattleManagerTBS._logWindow = this._logWindow;
+        this._logWindow.setSpriteset(this._spriteset);
         InputHandlerTBS.setup();
+        this.setMovableWindows();
 
-        InputHandlerTBS.addWindowBlockingTouch(this._windowConfirm);
-        InputHandlerTBS.addWindowBlockingTouch(this._windowCommand);
-        InputHandlerTBS.addWindowBlockingTouch(this._windowSkill);
-        InputHandlerTBS.addWindowBlockingTouch(this._windowItem);
-        InputHandlerTBS.addWindowBlockingTouch(this._windowStatus);
-        InputHandlerTBS.addWindowBlockingTouch(this._helpWindow);
+        InputHandlerTBS.addWindowBlockingTouch(this._windowConfirm)
+            .addWindowBlockingTouch(this._windowCommand)
+            .addWindowBlockingTouch(this._windowSkill)
+            .addWindowBlockingTouch(this._windowItem)
+            .addWindowBlockingTouch(this._windowStatus)
+            .addWindowBlockingTouch(this._helpWindow)
+            .addWindowBlockingTouch(this._windowEndCommand)
+            .addWindowBlockingTouch(this._windowPositioning)
+            .addWindowBlockingTouch(this._windowPositioningConfirm);
+
+        LeUtilities.getScene().showPositioningWindow();
 
         BattleManagerTBS.startBattle();
     } else {
@@ -771,8 +941,10 @@ Scene_Battle.prototype.createSpriteset = function () {
 Lecode.S_TBS.oldSB_createAllWindows = Scene_Battle.prototype.createAllWindows;
 Scene_Battle.prototype.createAllWindows = function () {
     if (Lecode.S_TBS.commandOn) {
-        //this.createLogWindow();
-        this.createPlacementWindow();
+        this.createLogWindow();
+        this.createPositioningWindow();
+        this.createPositioningConfirmWindow();
+        this.createPositioningInfoWindow();
         this.createConfirmationWindow();
         this.createStatusWindow();
         this.createCommandWindow();
@@ -786,11 +958,43 @@ Scene_Battle.prototype.createAllWindows = function () {
     }
 };
 
-Scene_Battle.prototype.createPlacementWindow = function () {
-    this._windowPlacement = new Window_TBSPlacementInfo();
-    this._windowPlacement.hide();
-    this._windowPlacement.deactivate();
-    this.addWindow(this._windowPlacement);
+Scene_Battle.prototype.setMovableWindows = function () {
+    BattleManagerTBS.getLayer("movableInfo").addChild(this._windowCommand);
+    BattleManagerTBS.getLayer("movableInfo").addChild(this._windowSkill);
+    BattleManagerTBS.getLayer("movableInfo").addChild(this._windowItem);
+};
+
+Scene_Battle.prototype.createPositioningWindow = function () {
+    this._windowPositioning = new Window_TBSPositioning();
+    this._windowPositioning.setHandler('ok', this.onPositioningOk.bind(this));
+    this._windowPositioning.setHandler('cancel', this.onPositioningCancel.bind(this));
+    this._windowPositioning.setHandler('exit_up', this.onPositioningExitUp.bind(this));
+    this._windowPositioning.hide();
+    this._windowPositioning.close();
+    this._windowPositioning.deactivate();
+    this._windowPositioning.x = 0;
+    this._windowPositioning.y = Graphics.height / 2 - this._windowPositioning.height / 2;
+    this.addWindow(this._windowPositioning);
+};
+
+Scene_Battle.prototype.createPositioningConfirmWindow = function () {
+    this._windowPositioningConfirm = new Window_TBSPositioningConfirm(this._windowPositioning.width);
+    this._windowPositioningConfirm.setHandler('ok', this.onPositioningConfirmOk.bind(this));
+    this._windowPositioningConfirm.setHandler('cancel', this.onPositioningConfirmCancel.bind(this));
+    this._windowPositioningConfirm.setHandler('cursor_down', this.onPositioningConfirmCursorDown.bind(this));
+    this._windowPositioningConfirm.hide();
+    this._windowPositioningConfirm.close();
+    this._windowPositioningConfirm.deactivate();
+    this._windowPositioningConfirm.x = this._windowPositioning.x;
+    this._windowPositioningConfirm.y = this._windowPositioning.y - this._windowPositioningConfirm.height;
+    this.addWindow(this._windowPositioningConfirm);
+};
+
+Scene_Battle.prototype.createPositioningInfoWindow = function () {
+    this._windowPositioningInfo = new Window_TBSPositioningInfo();
+    this._windowPositioningInfo.hide();
+    this._windowPositioningInfo.deactivate();
+    this.addWindow(this._windowPositioningInfo);
 };
 
 Scene_Battle.prototype.createConfirmationWindow = function () {
@@ -825,7 +1029,6 @@ Scene_Battle.prototype.createCommandWindow = function () {
         this._windowCommand.setHandler('cancel', this.onCommandInput.bind(this, "cancel"));
         this._windowCommand.hide();
         this._windowCommand.deactivate();
-        this.addWindow(this._windowCommand);
     } else {
         Lecode.S_TBS.oldSB_createCommandWindow.call(this);
     }
@@ -840,7 +1043,6 @@ Scene_Battle.prototype.createSkillWindow = function () {
         this._windowSkill._helpWindow = this._helpWindow;
         this._windowSkill.hide();
         this._windowSkill.deactivate();
-        this.addWindow(this._windowSkill);
     } else {
         Lecode.S_TBS.oldSB_createSkillWindow.call(this);
     }
@@ -855,7 +1057,6 @@ Scene_Battle.prototype.createItemWindow = function () {
         this._windowItem._helpWindow = this._helpWindow;
         this._windowItem.hide();
         this._windowItem.deactivate();
-        this.addWindow(this._windowItem);
     } else {
         Lecode.S_TBS.oldSB_createItemWindow.call(this);
     }
@@ -871,28 +1072,96 @@ Scene_Battle.prototype.createEndCommandWindow = function () {
     this.addWindow(this._windowEndCommand);
 };
 
-Scene_Battle.prototype.showPlacementWindow = function (cell, battler) {
-    this.placeWindowOverCell(this._windowPlacement, cell);
-    this._windowPlacement.show();
-    this._windowPlacement.open();
-    this._windowPlacement._battler = battler;
-    this._windowPlacement.refresh();
+Scene_Battle.prototype.activatePositioningWindow = function () {
+    this._windowPositioning.open();
+    this._windowPositioningConfirm.open();
+    this._windowPositioning.selectLast();
+    this._windowPositioning.activate();
+    for (var i = 0; i < $gameParty.battleMembers().length; i++) {
+        this._windowPositioning.select(i);
+        if (!this._windowPositioning._disabled[i])
+            break;
+    }
 };
 
-Scene_Battle.prototype.showStatusWindow = function (battler) {
-    if (battler.rpgObject().leTbs_hideStatusWindow) return;
+Scene_Battle.prototype.onPositioningOk = function () {
+    var actor = this._windowPositioning.actor();
+    this._windowPositioning.disableSelection();
+    this._windowPositioning.refresh();
+    this._windowPositioning.close();
+    this._windowPositioningConfirm.close();
+    BattleManagerTBS.processActorPositioning(actor);
+};
+
+Scene_Base.prototype.onPositioningCancel = function () {
+    var actor = this._windowPositioning.actor();
+    var currentEntity = BattleManagerTBS.getEntityWithActorId(actor.actorId());
+    if (currentEntity) {
+        BattleManagerTBS.processActorPositioning(actor);
+        BattleManagerTBS.positioningPhaseCancel();
+    }
+    this._windowPositioning.activate();
+};
+
+Scene_Battle.prototype.onActorPrePositioning = function (actor) {
+    this._windowPositioning.setFixedActor(actor);
+    this._windowPositioning.refresh();
+};
+
+Scene_Battle.prototype.onPositioningExitUp = function () {
+    this._windowPositioning.deactivate();
+    this._windowPositioning.deselect();
+    this._windowPositioningConfirm.activate();
+};
+
+Scene_Battle.prototype.onPositioningConfirmOk = function () {
+    BattleManagerTBS.positioningPhaseEnd();
+};
+
+Scene_Battle.prototype.onPositioningConfirmCancel = function () {
+    this.onPositioningConfirmCursorDown();
+};
+
+Scene_Battle.prototype.onPositioningConfirmCursorDown = function () {
+    this._windowPositioning.activate();
+    this._windowPositioning.selectLast();
+    this._windowPositioningConfirm.deactivate();
+    this._windowPositioningConfirm.deselect();
+};
+
+Scene_Battle.prototype.onTBSBattleBeginning = function () {
+    this.hideConfirmationWindow();
+    this._windowPositioning.deactivate();
+    this._windowPositioning.close();
+    this._windowPositioningConfirm.deactivate();
+    this._windowPositioningConfirm.close();
+};
+
+Scene_Battle.prototype.showPositioningWindow = function (cell, battler) {
+    this._windowPositioning.open();
+    this._windowPositioning.show();
+    this._windowPositioningConfirm.open();
+    this._windowPositioningConfirm.show();
+    this._windowPositioning.refresh();
+    this._windowPositioningConfirm.refresh();
+    this._windowPositioning.activate();
+};
+
+Scene_Battle.prototype.showStatusWindow = function (entity, slide) {
+    if (entity.battler().rpgObject().leTbs_hideStatusWindow) return;
     var window = this._windowStatus;
-    this._windowStatus._battler = battler;
+    this._windowStatus._entity = entity;
     this._windowStatus.show();
     this._windowStatus.open();
     this._windowStatus.refresh();
+    if (slide)
+        this._windowStatus.slide();
 };
 
 Scene_Battle.prototype.showCommandWindow = function () {
     var entity = BattleManagerTBS.activeEntity();
     var cell = entity.getCell();
     var battler = BattleManagerTBS.activeBattler();
-    this.placeWindowOverCell(this._windowCommand, cell);
     this._windowCommand.setup(battler, entity);
 };
 
@@ -900,7 +1169,7 @@ Scene_Battle.prototype.showSkillWindow = function () {
     var entity = BattleManagerTBS.activeEntity();
     var cell = entity.getCell();
     var battler = BattleManagerTBS.activeBattler();
-    this.placeWindowOverCell(this._windowSkill, cell);
+    this._windowSkill._entity = entity;
     this._windowSkill.setActor(battler);
     this._windowSkill.show();
     this._windowSkill.open();
@@ -913,7 +1182,7 @@ Scene_Battle.prototype.showItemWindow = function () {
     var entity = BattleManagerTBS.activeEntity();
     var cell = entity.getCell();
     var battler = BattleManagerTBS.activeBattler();
-    this.placeWindowOverCell(this._windowItem, cell);
+    this._windowItem._entity = entity;
     this._windowItem.show();
     this._windowItem.open();
     this._windowItem.refresh();
@@ -938,28 +1207,8 @@ Scene_Battle.prototype.showEndCommandWindow = function () {
     this._windowEndCommand.activate();
 };
 
-Scene_Battle.prototype.placeWindowOverCell = function (window, cell) {
-    var x = $gameMap.adjustX(cell.x) * $gameMap.tileWidth();
-    var y = $gameMap.adjustY(cell.y) * $gameMap.tileHeight();
-    var w = window.width;
-    var h = window.height;
-
-    x += $gameMap.tileWidth() / 2 - w / 2;
-    while (x < 0) x++;
-    while ((x + w) > Graphics.width) x--;
-
-    if (y <= h)
-        y += $gameMap.tileHeight() / 2 + 10;
-    else
-        y -= h - 10;
-
-    window.move(x, y, w, h);
-    window._leU_float = true;
-    window._leU_floatData.ini_pos = [x, y];
-};
-
-Scene_Battle.prototype.hidePlacementWindow = function (cell, battler) {
-    this._windowPlacement.close();
+Scene_Battle.prototype.hidePositioningWindow = function (cell, battler) {
+    this._windowPositioningInfo.close();
 };
 
 Scene_Battle.prototype.hideHelpWindow = function () {
@@ -1019,7 +1268,7 @@ Scene_Battle.prototype.onEndCommandInput = function (command) {
 };
 
 Scene_Battle.prototype.getWindowsWChangeableOpa = function () {
-    return [this._windowConfirm, this._windowPlacement, this._windowCommand, this._windowStatus,
+    return [this._windowConfirm, this._windowPositioningInfo, this._windowCommand, this._windowStatus,
     this._windowSkill, this._helpWindow
     ];
 };
@@ -1054,6 +1303,7 @@ InputHandlerTBS.setup = function () {
     this._active = true;
     this._lastSelectedCell = null;
     this._windowsBlocking = [];
+    this._oldMousePos = {};
 };
 
 InputHandlerTBS.isActive = function () {
@@ -1061,7 +1311,7 @@ InputHandlerTBS.isActive = function () {
 };
 
 InputHandlerTBS.lastSelectedCell = function () {
-    return this._lastSelectedCell || this._activeCell;
+    return this._lastSelectedCell || BattleManagerTBS._activeCell;
 };
 
 InputHandlerTBS.setActive = function (active) {
@@ -1070,38 +1320,52 @@ InputHandlerTBS.setActive = function (active) {
 
 InputHandlerTBS.addWindowBlockingTouch = function (window) {
     this._windowsBlocking.push(window);
+    return this;
 };
 
 InputHandlerTBS.setOnTouchCallback = function (callback) {
     this._onTouchCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.setOnTouchCancelCallback = function (callback) {
     this._onTouchCancelCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.setOnUpCallback = function (callback) {
     this._onUpCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.setOnRightCallback = function (callback) {
     this._onRightCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.setOnDownCallback = function (callback) {
     this._onDownCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.setOnLeftCallback = function (callback) {
     this._onLeftCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.setOnOkCallback = function (callback) {
     this._onOkCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.setOnCancelCallback = function (callback) {
     this._onCancelCallback = callback;
+    return this;
+};
+
+InputHandlerTBS.setOnMoveCallback = function (callback) {
+    this._onMoveCallback = callback;
+    return this;
 };
 
 InputHandlerTBS.update = function () {
@@ -1127,13 +1391,12 @@ InputHandlerTBS.update = function () {
         BattleManagerTBS._opacityInputed = false;
 
     if (TouchInput.isTriggered()) {
+        var x = $gameMap.canvasToMapX(TouchInput.x);
+        var y = $gameMap.canvasToMapY(TouchInput.y);
+        var cell = BattleManagerTBS.getCellAt(x, y);
+        this.processCallback("Touch", cell);
+        this._lastSelectedCell = cell;
         if (!this.isTouchBlocked()) {
-            var x = $gameMap.canvasToMapX(TouchInput.x);
-            var y = $gameMap.canvasToMapY(TouchInput.y);
-            var cell = BattleManagerTBS.getCellAt(x, y);
-            this.processCallback("Touch", cell);
-            this._lastSelectedCell = cell;
-            console.log("cell:", cell);
             $gameTemp.setDestination(x, y);
             BattleManagerTBS.resetDestinationCount();
         }
@@ -1157,6 +1420,13 @@ InputHandlerTBS.update = function () {
         this.processCallback("Ok");
     if (Input.isTriggered("cancel"))
         this.processCallback("Cancel");
+
+    if (TouchInput._leTBSMoveData.x != this._oldMousePos.x ||
+        TouchInput._leTBSMoveData.y != this._oldMousePos.y) {
+        this.processCallback("Move");
+        this._oldMousePos.x = TouchInput._leTBSMoveData.x;
+        this._oldMousePos.y = TouchInput._leTBSMoveData.y;
+    }
 };
 
 InputHandlerTBS.processCallback = function (key, arg) {
@@ -1238,6 +1508,8 @@ BattleManagerTBS.initMembers = function () {
     this._phase = "init";
     this._subPhase = "";
     this._startCells = [];
+    this._positioningEntityToSwap = null;
+    this._currentPositioningEntity = null;
     this._groundCells = {};
     this._cursor = null;
     this._activeCell = null;
@@ -1291,10 +1563,6 @@ BattleManagerTBS.actionScope = function () {
     return this._actionScope;
 };
 
-BattleManagerTBS.lastSelectedCell = function () {
-    return this._lastSelectedCell;
-};
-
 BattleManagerTBS.isExploring = function () {
     return this._exploring;
 };
@@ -1318,7 +1586,7 @@ BattleManagerTBS.isWaiting = function () {
 
 BattleManagerTBS.startBattle = function () {
     this.prepare();
-    this.processPlacementPhase();
+    this.processPositioningPhase();
 };
 
 BattleManagerTBS.prepare = function () {
@@ -1377,12 +1645,26 @@ BattleManagerTBS.createStartCells = function () {
     $gameMap.events().forEach(function (eventObj) {
         var x = eventObj.event().x;
         var y = eventObj.event().y;
-        var name = eventObj.event().name;
-        var cell = new TBSCell(x, y);
-        cell._event = eventObj.event();
-        if (name == "ally" || name == "enemy")
-            this.createPlacementCell(name, x, y, cell);
-        this._startCells.push(cell);
+        var note = eventObj.event().note;
+        var data = {};
+        if (note.match(/<Enemy Cell>/i)) {
+            data.type = "enemy";
+        } else if (note.match(/<Enemy Cell\s?:\s?(.+)>/i)) {
+            data.type = "enemy";
+            data.fixed = Number(RegExp.$1);
+        } else if (note.match(/<Actor Cell>/i)) {
+            data.type = "actor";
+        } else if (note.match(/<Actor Cell\s?:\s?(.+)>/i)) {
+            data.type = "actor";
+            data.fixed = Number(RegExp.$1);
+        }
+        if (data.type) {
+            var cell = new TBSCell(x, y);
+            cell._event = eventObj.event();
+            cell._positioningData = data;
+            this.createPositioningCell(data.type, x, y, cell);
+            this._startCells.push(cell);
+        }
     }.bind(this));
 };
 
@@ -1585,8 +1867,8 @@ BattleManagerTBS.setInputOpacity = function () {
 BattleManagerTBS.updatePhase = function () {
     if ($gameMessage.isBusy()) return;
     switch (this._phase) {
-        case "placement":
-            this.updatePlacementPhase();
+        case "positioning":
+            this.updatePositioningPhase();
             break;
         case "battle_beginning":
             this.updateBeginningPhase();
@@ -1615,38 +1897,58 @@ BattleManagerTBS.updateTBSEvents = function () {
     }
 };
 
-BattleManagerTBS.createPlacementCell = function (type, x, y, cell) {
-    var opacity = Lecode.S_TBS.placementCellOpacity;
-    var color = (type == "ally") ? Lecode.S_TBS.allyColorCell : Lecode.S_TBS.enemyColorCell;
+BattleManagerTBS.createPositioningCell = function (type, x, y, cell) {
+    var opacity = Lecode.S_TBS.positioningCellOpacity;
+    var color = (type === "actor") ? Lecode.S_TBS.actorColorCell : Lecode.S_TBS.enemyColorCell;
     this.getLayer("scopes").drawCell(x, y, opacity, color);
     cell._type = type;
 };
 
-BattleManagerTBS.processPlacementPhase = function () {
-    this._phase = "placement";
+BattleManagerTBS.processPositioningPhase = function () {
+    this._phase = "positioning";
     this._subPhase = "";
-    this._actorsToPlace = [];
-    this._enemiesToPlace = [];
-    $gameParty.battleMembers().forEach(function (mem) {
-        if (!mem.isDead())
-            this._actorsToPlace.push(mem);
-    }.bind(this));
+    this._actorsToPositionate = [];
+    this._enemiesToPositionate = [];
     $gameTroop.members().forEach(function (mem) {
-        this._enemiesToPlace.push(mem);
+        this._enemiesToPositionate.push(mem);
     }.bind(this));
-    this.processEnemyPlacement();
+    this.allyStartCells().forEach(function (cell) {
+        if (cell._positioningData.type === "actor") {
+            var id = cell._positioningData.fixed;
+            if (id)
+                this._actorsToPositionate.push($gameActors.actor(id));
+        }
+    }.bind(this));
+    this.processActorsPrePositioning();
+    this.processEnemyPositioning();
 
-    InputHandlerTBS.setOnTouchCallback(this.placementPhaseOnTouchInput.bind(this));
-    InputHandlerTBS.setOnTouchCancelCallback(this.placementPhaseOnInputCancel.bind(this));
-    InputHandlerTBS.setOnOkCallback(this.placementPhaseOnInputOk.bind(this));
-    InputHandlerTBS.setOnCancelCallback(this.placementPhaseOnInputCancel.bind(this));
-    InputHandlerTBS.setOnRightCallback(this.placementPhaseOnInputRight.bind(this));
-    InputHandlerTBS.setOnLeftCallback(this.placementPhaseOnInputLeft.bind(this));
-    InputHandlerTBS.setOnDownCallback(this.placementPhaseOnInputDown.bind(this));
-    InputHandlerTBS.setOnUpCallback(this.placementPhaseOnInputUp.bind(this));
+    InputHandlerTBS.setOnTouchCallback(this.positioningPhaseOnTouchInput.bind(this))
+        .setOnTouchCancelCallback(this.positioningPhaseOnInputCancel.bind(this))
+        .setOnOkCallback(this.positioningPhaseOnInputOk.bind(this))
+        .setOnCancelCallback(this.positioningPhaseOnInputCancel.bind(this))
+        .setOnRightCallback(this.positioningPhaseOnInputRight.bind(this))
+        .setOnLeftCallback(this.positioningPhaseOnInputLeft.bind(this))
+        .setOnDownCallback(this.positioningPhaseOnInputDown.bind(this))
+        .setOnUpCallback(this.positioningPhaseOnInputUp.bind(this))
+        .setOnMoveCallback(this.positioningPhaseOnMouseMove.bind(this));
 };
 
-BattleManagerTBS.placementPhaseOnTouchInput = function (selectedCell) {
+BattleManagerTBS.positioningPhaseOnMouseMove = function () {
+    if (this._subPhase === "directionSelector_input") {
+        var x = $gameMap.canvasToMapX(TouchInput._leTBSMoveData.x);
+        var y = $gameMap.canvasToMapY(TouchInput._leTBSMoveData.y);
+        var cell = BattleManagerTBS.getCellAt(x, y);
+        if (cell) {
+            var entity = this._directionSelector._battlerEntity;
+            var oldDir = entity.getDir();
+            entity.lookAt(cell);
+            if (oldDir != entity.getDir())
+                this._directionSelector.setDir(entity.getDir());
+        }
+    }
+};
+
+BattleManagerTBS.positioningPhaseOnTouchInput = function (selectedCell) {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByTouch(selectedCell);
@@ -1655,31 +1957,43 @@ BattleManagerTBS.placementPhaseOnTouchInput = function (selectedCell) {
             this.setDirectionSelectionDirByTouch(selectedCell);
             break;
     }
+    this.checkStartWindowInput();
 };
 
-BattleManagerTBS.placementPhaseOnInputOk = function () {
+BattleManagerTBS.checkStartWindowInput = function () {
+    var window = LeUtilities.getScene()._windowPositioningConfirm;
+    if (window.visible && window.isMouseInsideFrame()) {
+        LeUtilities.getScene().onPositioningExitUp();
+    }
+    window = LeUtilities.getScene()._windowPositioning;
+    if (window.visible && !window.active && window.isMouseInsideFrame()) {
+        LeUtilities.getScene().onPositioningConfirmCursorDown();
+    }
+};
+
+BattleManagerTBS.positioningPhaseOnInputOk = function () {
     switch (this._subPhase) {
         case "input":
-            this.placementPhaseOk();
+            this.positioningPhaseOk();
             break;
         case "directionSelector_input":
-            this.directionSelectorValidatePlacement();
+            this.directionSelectorValidatePositioning();
             break;
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputCancel = function () {
+BattleManagerTBS.positioningPhaseOnInputCancel = function () {
     switch (this._subPhase) {
         case "input":
-            this.placementPhaseCancel();
+            this.positioningPhaseCancel();
             break;
         case "directionSelector_input":
-            this.directionSelectorCancelPlacement();
+            this.directionSelectorCancelPositioning();
             break;
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputLeft = function () {
+BattleManagerTBS.positioningPhaseOnInputLeft = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("left");
@@ -1690,7 +2004,7 @@ BattleManagerTBS.placementPhaseOnInputLeft = function () {
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputRight = function () {
+BattleManagerTBS.positioningPhaseOnInputRight = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("right");
@@ -1701,7 +2015,7 @@ BattleManagerTBS.placementPhaseOnInputRight = function () {
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputDown = function () {
+BattleManagerTBS.positioningPhaseOnInputDown = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("down");
@@ -1712,7 +2026,7 @@ BattleManagerTBS.placementPhaseOnInputDown = function () {
     }
 };
 
-BattleManagerTBS.placementPhaseOnInputUp = function () {
+BattleManagerTBS.positioningPhaseOnInputUp = function () {
     switch (this._subPhase) {
         case "input":
             this.selectStartCellByDir("up");
@@ -1723,21 +2037,35 @@ BattleManagerTBS.placementPhaseOnInputUp = function () {
     }
 };
 
-BattleManagerTBS.updatePlacementPhase = function () {
+BattleManagerTBS.updatePositioningPhase = function () {
     if (this._subPhase === "troop") {
         if (!this.getLayer("animations").isAnimationPlaying()) {
-            if (this._enemiesToPlace.length === 0)
-                this.processActorsPlacement();
+            if (this._enemiesToPositionate.length === 0)
+                this.waitForPositioningInput();
             else
                 this.placeNextEnemy();
         }
     }
 };
 
-BattleManagerTBS.processEnemyPlacement = function () {
+BattleManagerTBS.processActorsPrePositioning = function () {
+    if (this._actorsToPositionate.length === 0) return;
+    do {
+        var actor = this._actorsToPositionate.shift();
+        var cell = this.allyStartCells().filter(function (cell) {
+            return cell._positioningData.fixed === actor.actorId();
+        })[0];
+        var entity = new TBSEntity(actor, this.getLayer("battlers"));
+        entity.setCell(cell);
+        this._battlerEntities.push(entity);
+        LeUtilities.getScene().onActorPrePositioning(actor);
+    } while (this._actorsToPositionate.length > 0);
+};
+
+BattleManagerTBS.processEnemyPositioning = function () {
     this._subPhase = "troop";
     if (Lecode.S_TBS.instantiateAll) {
-        while (this._enemiesToPlace.length > 0)
+        while (this._enemiesToPositionate.length > 0)
             this.placeNextEnemy();
     } else {
         this.placeNextEnemy();
@@ -1745,34 +2073,76 @@ BattleManagerTBS.processEnemyPlacement = function () {
 };
 
 BattleManagerTBS.placeNextEnemy = function () {
-    var enemy = this._enemiesToPlace.shift();
+    var enemy = this._enemiesToPositionate.shift();
     var cells = this.enemyStartCells().filter(function (c) {
-        return Number(c._event.note) === enemy.index() + 1 && this.isCellFree(c);
+        return c._positioningData.fixed === enemy.index() + 1 && this.isCellFree(c);
     }.bind(this));
+    if (cells.length === 0) {
+        cells = this.enemyStartCells().filter(function (c) {
+            return this.isCellFree(c);
+        }.bind(this));
+    }
     var cell = LeUtilities.getRandomValueInArray(cells);
     if (cell) {
         cell.select();
         this.centerActiveCell();
         this.updateCursor();
         var entity = new TBSEntity(enemy, this.getLayer("battlers"));
-        this.getLayer("animations").newAnimation(Lecode.S_TBS.placedBattlerAnim, false, 0, cell, entity._sprite);
         entity.setCell(cell);
+        entity.newAnimation(Lecode.S_TBS.placedBattlerAnim, false, 0);
         this._battlerEntities.push(entity);
     }
 };
 
-BattleManagerTBS.processActorsPlacement = function () {
-    InputHandlerTBS.setActive(true);
-    this._subPhase = "input";
-    this.placementSelect(this.allyStartCells()[0]);
+BattleManagerTBS.waitForPositioningInput = function () {
+    this._subPhase = "wait";
+    this.selectNextStartCell();
+    this.cursor().hide();
+    LeUtilities.getScene().activatePositioningWindow();
 };
 
-BattleManagerTBS.placementSelect = function (cell) {
+BattleManagerTBS.processActorPositioning = function (actor) {
+    this.cursor().show();
+    InputHandlerTBS.setActive(true);
+    this._subPhase = "input";
+    var currentEntity = this.getEntityWithActorId(actor.actorId());
+    if (currentEntity) {
+        this._currentPositioningEntity = currentEntity;
+        this.positioningSelect(currentEntity.getCell());
+        currentEntity.setOpacity(255);
+        currentEntity.startFlash([255, 255, 255, 255], 20, true);
+        return;
+    }
+    var entity = new TBSEntity(actor, this.getLayer("battlers"));
+    var cell = this.getNextActorPositioningCell();
+    entity.setOpacity(255);
+    entity.startFlash([255, 255, 255, 255], 20, true);
+    this._currentPositioningEntity = entity;
+    this.positioningSelect(cell);
+    entity.newAnimation(Lecode.S_TBS.placedBattlerAnim, false, 0);
+};
+
+BattleManagerTBS.positioningSelect = function (cell) {
     cell.select();
-    this.centerActiveCell();
+    this.centerCell(cell);
     this.updateCursor();
-    var battler = this._actorsToPlace[0];
-    LeUtilities.getScene().showPlacementWindow(cell, battler);
+    if (this._currentPositioningEntity) {
+        var actorId = this._currentPositioningEntity.battler().actorId();
+        if (this._positioningEntityToSwap) {
+            this._positioningEntityToSwap.stopFLash();
+        }
+        var entity = cell.getEntity();
+        if (entity && entity.battler().actorId() != actorId) {
+            this._positioningEntityToSwap = entity;
+            this._currentPositioningEntity.stopFLash();
+            this._currentPositioningEntity.startFlash([255, 255, 255, 255], 20, true);
+            entity.startFlash([255, 255, 255, 255], 20, true);
+        } else {
+            this._currentPositioningEntity.setCell(cell);
+            this.updateEnemiesDirectionForPositioning();
+            this._positioningEntityToSwap = null;
+        }
+    }
 };
 
 BattleManagerTBS.selectStartCellByDir = function (dir) {
@@ -1808,7 +2178,7 @@ BattleManagerTBS.selectStartCellByDir = function (dir) {
             break;
     }
     if (found && found != cell) {
-        this.placementSelect(found);
+        this.positioningSelect(found);
         SoundManager.playCursor();
     }
 };
@@ -1819,20 +2189,27 @@ BattleManagerTBS.selectStartCellByTouch = function (cell) {
         var currentCell = this._activeCell;
         if (this.isCellInScope(cell, scope)) {
             if (currentCell.isSame(cell)) {
-                this.placementPhaseOk();
+                this.positioningPhaseOk();
             } else {
-                this.placementSelect(cell);
+                this.positioningSelect(cell);
             }
         } else {
-            this.placementPhaseOk();
+            this.positioningPhaseOk();
         }
     }
 };
 
-BattleManagerTBS.selectNextStartCell = function () {
+BattleManagerTBS.getNextActorPositioningCell = function () {
+    if (this.allyEntities().length >= this.allyStartCells().length)
+        return this.allyStartCells()[0];
     var currentIndex = this.allyStartCells().indexOf(this._activeCell);
+    if (currentIndex === -1) {
+        return this.allyStartCells()[0];
+    }
     var cell = this._activeCell;
     var currentEntity = cell.getEntity();
+    if (!currentEntity)
+        return cell;
     var index = currentIndex;
     do {
         if (index === this.allyStartCells().length - 1)
@@ -1842,65 +2219,67 @@ BattleManagerTBS.selectNextStartCell = function () {
         cell = this.allyStartCells()[index];
         currentEntity = cell.getEntity();
     } while (currentEntity);
-    this.placementSelect(cell);
+    return cell;
+};
+
+BattleManagerTBS.selectNextStartCell = function () {
+    var cell = this.getNextActorPositioningCell();
+    this.positioningSelect(cell);
     SoundManager.playCursor();
 };
 
-BattleManagerTBS.selectPreviousStartCell = function () {
-    var currentIndex = this.allyStartCells().indexOf(this._activeCell);
-    var index = currentIndex === 0 ? this.allyStartCells().length - 1 : currentIndex - 1;
-    this.placementSelect(this.allyStartCells()[index]);
-    SoundManager.playCursor();
-};
-
-BattleManagerTBS.placementPhaseOk = function () {
-    var cell = this._activeCell;
-    var currentEntity = cell.getEntity();
-    if (currentEntity) {
-        this.removeBattlerEntity(currentEntity);
-    }
-    var battler = this._actorsToPlace.shift();
-    var entity = this.placeBattler(battler, cell);
-    this.callDirectionSelector(entity, cell);
-};
-
-BattleManagerTBS.placementPhaseCancel = function () {
-    var cell = this._activeCell;
-    var currentEntity = cell.getEntity();
-    if (currentEntity) {
-        this.removeBattlerEntity(currentEntity);
-        this.placementSelect(this._activeCell);
-        SoundManager.playCancel();
-    } else
-        SoundManager.playBuzzer();
-};
-
-BattleManagerTBS.placeBattler = function (battler, cell) {
-    var entity = new TBSEntity(battler, this.getLayer("battlers"));
-    this.getLayer("animations").newAnimation(Lecode.S_TBS.placedBattlerAnim, false, 0, cell, entity._sprite);
-    entity.setCell(cell);
-    this._battlerEntities.push(entity);
+BattleManagerTBS.positioningPhaseOk = function () {
     SoundManager.playOk();
-    this.updateEnemiesDirectionWhilePlacement();
-    return entity;
+    var cell = this._activeCell;
+    var entity = this._positioningEntityToSwap;
+    if (entity) {
+        entity.setCell(this._currentPositioningEntity.getCell());
+        entity.stopFLash();
+        this._currentPositioningEntity.setCell(cell);
+        this._positioningEntityToSwap = null;
+        return;
+    }
+    var actorId = this._currentPositioningEntity.battler().actorId();
+    var currentEntity = this.getEntityWithActorId(actorId);
+    if (!currentEntity)
+        this._battlerEntities.push(this._currentPositioningEntity);
+    this.callDirectionSelector(this._currentPositioningEntity, cell);
+    LeUtilities.getScene()._windowPositioningConfirm.setEnabled(true);
+    LeUtilities.getScene()._windowPositioningConfirm.refresh();
 };
 
-BattleManagerTBS.removeBattlerEntity = function (entity) {
-    this._actorsToPlace.unshift(entity._battler);
-    LeUtilities.removeInArray(this.allPlayableEntities(), entity);
-    this.getLayer("battlers").removeChild(entity._sprite);
+BattleManagerTBS.positioningPhaseCancel = function () {
+    var entity = this._currentPositioningEntity;
+    if (!entity) {
+        SoundManager.playBuzzer();
+        return;
+    }
+    InputHandlerTBS.setActive(false);
+    var actor = LeUtilities.getScene()._windowPositioning.actor();
+    LeUtilities.getScene()._windowPositioning.enableSelection();
+    LeUtilities.getScene()._windowPositioning.refresh();
+    LeUtilities.getScene().activatePositioningWindow();
+    this.cursor().hide();
+    SoundManager.playCancel();
+    this.destroyEntity(entity);
+    this._currentPositioningEntity = null;
+    if (this.allyEntities().length === 0) {
+        LeUtilities.getScene()._windowPositioningConfirm.setEnabled(false);
+        LeUtilities.getScene()._windowPositioningConfirm.refresh();
+    }
 };
 
-BattleManagerTBS.updateEnemiesDirectionWhilePlacement = function () {
+BattleManagerTBS.updateEnemiesDirectionForPositioning = function () {
+    var actors = this.allyEntities().concat([this._currentPositioningEntity]);
     this.enemyEntities().forEach(function (ent) {
-        ent.lookClosestBattler(this.allyEntities());
+        ent.lookClosestBattler(actors);
     }.bind(this));
 };
 
 BattleManagerTBS.callDirectionSelector = function (battler, cell) {
     this._subPhase = "directionSelector_input";
     this._directionSelector.set(cell, battler);
-    LeUtilities.getScene().hidePlacementWindow(cell, battler);
+    LeUtilities.getScene().hidePositioningWindow(cell, battler);
 };
 
 BattleManagerTBS.setDirectionSelectorUp = function () {
@@ -1919,43 +2298,51 @@ BattleManagerTBS.setDirectionSelectorRight = function () {
     this._directionSelector.setDir(6);
 };
 
-BattleManagerTBS.directionSelectorValidatePlacement = function () {
+BattleManagerTBS.directionSelectorValidatePositioning = function () {
     SoundManager.playOk();
+    Input.clear();
+    this._currentPositioningEntity.stopFLash();
+    this._currentPositioningEntity.setOpacity(255);
     this._directionSelector.hide();
-    this._subPhase = "input";
-    if (this.canEndPlacementPhase())
-        this.placementPhaseEnd();
-    else
-        this.selectNextStartCell();
+    this._subPhase = "";
+    this._currentPositioningEntity = null;
+    LeUtilities.getScene().activatePositioningWindow();
+    this.cursor().hide();
+    if (this.allyEntities().length === $gameParty.battleMembers().length) {
+        LeUtilities.getScene()._windowPositioning.deactivate();
+        LeUtilities.getScene()._windowPositioning.deselect();
+        this.positioningPhaseEnd();
+    }
 };
 
 BattleManagerTBS.setDirectionSelectionDirByTouch = function (selectedCell) {
     var entity = this._directionSelector._battlerEntity;
     entity.lookAt(selectedCell);
-    this.directionSelectorValidatePlacement();
+    this.directionSelectorValidatePositioning();
 };
 
-BattleManagerTBS.directionSelectorCancelPlacement = function () {
+BattleManagerTBS.directionSelectorCancelPositioning = function () {
     this._directionSelector.hide();
     this._subPhase = "input";
-    this.placementPhaseCancel();
+    this.positioningPhaseCancel();
 };
 
-BattleManagerTBS.placementPhaseEnd = function () {
+BattleManagerTBS.positioningPhaseEnd = function () {
     this._subPhase = "confirm";
     Input.clear();
     LeUtilities.getScene().showConfirmationWindow();
 };
 
-BattleManagerTBS.resumePlacementPhase = function () {
+BattleManagerTBS.resumePositioningPhase = function () {
     LeUtilities.getScene().hideConfirmationWindow();
-    this.placementPhaseCancel();
-    this._subPhase = "input";
+    LeUtilities.getScene().activatePositioningWindow();
+    LeUtilities.getScene()._windowPositioningConfirm.deselect();
+    this._subPhase = "";
 };
 
 BattleManagerTBS.onConfirmationWindowOK = function () {
     switch (this._phase) {
-        case "placement":
+        case "positioning":
             this.battleBeginning();
             break;
     }
@@ -1963,15 +2350,15 @@ BattleManagerTBS.onConfirmationWindowOK = function () {
 
 BattleManagerTBS.onConfirmationWindowCancel = function () {
     switch (this._phase) {
-        case "placement":
-            this.resumePlacementPhase();
+        case "positioning":
+            this.resumePositioningPhase();
             break;
     }
 };
 
 BattleManagerTBS.battleBeginning = function () {
     this._phase = "battle_beginning";
-    LeUtilities.getScene().hideConfirmationWindow();
+    LeUtilities.getScene().onTBSBattleBeginning();
 
     this._startSprite.visible = true;
     this._startSprite.x = Graphics.width / 2 - this._startSprite.width / 2;
@@ -2003,10 +2390,12 @@ BattleManagerTBS.updateBeginningPhase = function () {
 
 BattleManagerTBS.beginningPhaseEnd = function () {
     this._startSprite.visible = false;
+    this.cursor().show();
     this.processBattle();
 };
 
 BattleManagerTBS.processBattle = function () {
+    InputHandlerTBS.setActive(true);
     this._phase = "battle_processing";
     this._subPhase = "";
 
@@ -2014,21 +2403,21 @@ BattleManagerTBS.processBattle = function () {
     this.allEntities().forEach(function (entity) {
         entity.onBattleStart();
     }.bind(this));
-    this.hidePlacementCells();
+    this.hidePositioningCells();
     this.determineTurnOrder();
-    $gameTroop.increaseTurn();
+    //$gameTroop.increaseTurn();
     this.setEntitiesFlag();
     this.executeEventsAtBattleStart();
     this.startTurn();
 
-    InputHandlerTBS.setOnTouchCallback(this.battlePhaseOnTouchInput.bind(this));
-    InputHandlerTBS.setOnTouchCancelCallback(this.battlePhaseOnInputCancel.bind(this));
-    InputHandlerTBS.setOnOkCallback(this.battlePhaseOnInputOk.bind(this));
-    InputHandlerTBS.setOnCancelCallback(this.battlePhaseOnInputCancel.bind(this));
-    InputHandlerTBS.setOnUpCallback(this.battlePhaseOnInputUp.bind(this));
-    InputHandlerTBS.setOnRightCallback(this.battlePhaseOnInputRight.bind(this));
-    InputHandlerTBS.setOnDownCallback(this.battlePhaseOnInputDown.bind(this));
-    InputHandlerTBS.setOnLeftCallback(this.battlePhaseOnInputLeft.bind(this));
+    InputHandlerTBS.setOnTouchCallback(this.battlePhaseOnTouchInput.bind(this))
+        .setOnTouchCancelCallback(this.battlePhaseOnInputCancel.bind(this))
+        .setOnOkCallback(this.battlePhaseOnInputOk.bind(this))
+        .setOnCancelCallback(this.battlePhaseOnInputCancel.bind(this))
+        .setOnUpCallback(this.battlePhaseOnInputUp.bind(this))
+        .setOnRightCallback(this.battlePhaseOnInputRight.bind(this))
+        .setOnDownCallback(this.battlePhaseOnInputDown.bind(this))
+        .setOnLeftCallback(this.battlePhaseOnInputLeft.bind(this));
 };
 
 BattleManagerTBS.battlePhaseOnTouchInput = function (selectedCell) {
@@ -2157,7 +2546,7 @@ BattleManagerTBS.updateBattleProcessing = function () {
         this.startTurn();
 };
 
-BattleManagerTBS.hidePlacementCells = function () {
+BattleManagerTBS.hidePositioningCells = function () {
     this.getLayer("scopes").clear();
 };
 
@@ -2177,9 +2566,8 @@ BattleManagerTBS.determineTurnOrderSimple = function () {
         array.push(entity);
     });
     array = array.sort(function (a, b) {
-        return (a._battler.agi > b._battler.agi) ? 1 : ((a._battler.agi < b._battler.agi) ? -1 : 0);
+        return b._battler.agi - a._battler.agi;
     });
-    array.reverse();
 
     this._turnOrder = array;
     this._turnOrderVisual.set(this._turnOrder);
@@ -2196,36 +2584,24 @@ BattleManagerTBS.determineTurnOrderFair = function () {
         actors.push(entity);
     });
     actors = actors.sort(function (a, b) {
-        return (a._battler.agi > b._battler.agi) ? 1 : ((a._battler.agi < b._battler.agi) ? -1 : 0);
+        return b._battler.agi - a._battler.agi;
     });
-    actors.reverse();
 
     this.enemyEntities().forEach(function (entity) {
         enemies.push(entity);
     });
     enemies = enemies.sort(function (a, b) {
-        return (a._battler.agi > b._battler.agi) ? 1 : ((a._battler.agi < b._battler.agi) ? -1 : 0);
+        return b._battler.agi - a._battler.agi;
     });
-    enemies.reverse();
 
-    if (actors[0]._battler.agi >= enemies[0]._battler.agi)
-        array.push(actors.shift());
-    else
-        array.push(enemies.shift());
-    var max = actors.length + enemies.length;
-    for (var i = 1; i <= max; i++) {
-        var last = array.leU_last();
-        if (last._battler.isActor()) {
-            if (enemies.length > 0)
-                array.push(enemies.shift());
-            else
-                array.push(actors.shift());
-        } else {
-            if (actors.length > 0)
-                array.push(actors.shift());
-            else
-                array.push(enemies.shift());
-        }
+    var partySet = actors[0]._battler.agi >= enemies[0]._battler.agi ? actors : enemies;
+    var partyLeft = actors[0]._battler.agi >= enemies[0]._battler.agi ? enemies : actors;
+    while (partySet.length > 0)
+        array.push(partySet.shift());
+    var index = 0;
+    while (partyLeft.length > 0) {
+        array.splice(index + 1, 0, partyLeft.shift());
+        index += 2;
     }
 
     this._turnOrder = array;
@@ -2254,26 +2630,36 @@ BattleManagerTBS.startTurn = function () {
         this._subPhase = "turn_starting";
         return;
     }
+    this._actionScope = {};
+    this.getLayer("scopes").clear();
+    this.getLayer("scopes").clearSelection();
     this._subPhase = "";
     var entity = this.activeEntity();
     entity.onTurnStart();
 
     var battler = this.activeBattler();
-    this.newAction(battler);
-    LeUtilities.getScene().showStatusWindow(battler);
+    this.newAction(battler, true);
+    LeUtilities.getScene().showStatusWindow(entity, true);
 
     var cell = entity.getCell();
     this.setCursorCell(cell);
+    this.cursor().show();
 
-    if (battler.isActor()) {
+    if (!entity.playableByAI()) {
         LeUtilities.getScene().showCommandWindow();
     } else {
-        this._subPhase = "ai";
-        if (battler.isDead())
-            this.processCommandPass();
-        else
-            this._aiManager.process(entity);
+        this.startAiTurn(entity, battler);
     }
+};
+
+BattleManagerTBS.startAiTurn = function (entity, battler) {
+    this._subPhase = "ai";
+    if (battler.isDead())
+        this.processCommandPass();
+    else
+        this._aiManager.process(entity);
+    if (!Lecode.S_TBS.showScopes)
+        this.cursor().hide();
 };
 
 BattleManagerTBS.updateSequences = function () {
@@ -2339,9 +2725,9 @@ BattleManagerTBS.updateTargetStatus = function () {
     var entity = cell.getEntity();
     var scene = LeUtilities.getScene();
     if (entity) {
-        scene.showStatusWindow(entity._battler);
+        scene.showStatusWindow(entity);
     } else {
-        scene.showStatusWindow(this.activeBattler());
+        scene.showStatusWindow(this.activeEntity());
     }
 };
 
@@ -2370,28 +2756,40 @@ BattleManagerTBS.onCommandInput = function (command) {
 
 BattleManagerTBS.processCommandMove = function () {
     this._subPhase = "move";
-    var points = this.activeEntity().getMovePoints();
-    this.drawMoveScope(this.activeEntity(), points);
+    this.drawMoveScope(this.activeEntity());
 };
 
-BattleManagerTBS.drawMoveScope = function (entity, points) {
+BattleManagerTBS.makeMoveScope = function (entity, isFloating) {
     var center = entity.getCell().toCoords();
+    var points = entity.getMovePoints();
     var param = this.makeMoveScopeParam(entity);
     var data = entity.getMoveScopeData();
     var scope = this.getScopeFromData(data, center, param, points);
+    if (isFloating) {
+        return {
+            cells: scope,
+            center: center
+        };
+    }
+    this._moveScope = {};
+    this._moveScope.cells = scope;
+    this._moveScope.center = center;
+};
+
+BattleManagerTBS.drawMoveScope = function (entity) {
+    this.makeMoveScope(entity);
+    var scope = this._moveScope.cells;
     var color = Lecode.S_TBS.moveColorCell;
     var opa = Lecode.S_TBS.moveCellOpacity;
     var invalidOpa = Lecode.S_TBS.moveInvalidCellOpacity;
     var invalidCondition = "!cell._walkable";
     this.getLayer("scopes").clear();
     this.drawScope(scope, color, opa, invalidOpa, invalidCondition);
-    this._moveScope = {};
-    this._moveScope.cells = scope;
-    this._moveScope.center = center;
 };
 
 BattleManagerTBS.makeMoveScopeParam = function (entity) {
     var param = {
+        user: entity,
         dir: entity.getDir(),
         exclude_center: true,
         can_select_obstacles: false,
@@ -2423,17 +2821,16 @@ BattleManagerTBS.updateMoveSelection = function () {
         dx = this.cursor().cellX,
         dy = this.cursor().cellY;
     this._movePath = this.getPathFromAToB(sx, sy, dx, dy, "walkable");
-    this.drawMoveSelection();
+    if (!(this._subPhase === "ai" && !Lecode.S_TBS.showScopes))
+        this.drawMoveSelection();
 };
 
 BattleManagerTBS.drawMoveSelection = function () {
     this.clearMoveSelection();
     var color = Lecode.S_TBS.moveColorCell;
+    var scolor = Lecode.S_TBS.selectedMoveColorCell;
     var opacity = Lecode.S_TBS.moveSelectedCellOpacity;
-    for (var i = 0; i < this.movePath().length; i++) {
-        var cell = this.movePath()[i];
-        this.getLayer("scopes").drawSelectionCell(cell.x, cell.y, opacity, color);
-    }
+    this.getLayer("scopes").drawSelectionCells(this.movePath(), opacity, color, scolor);
 };
 
 BattleManagerTBS.clearMoveSelection = function () {
@@ -2465,13 +2862,13 @@ BattleManagerTBS.onActiveEntityMoveEnd = function () {
     this._moveScope = {};
 
     this.activeEntity()._movePerformed = true;
-    if (this.activeBattler().isActor()) {
+    if (!this.activeEntity().playableByAI()) {
         if (Lecode.S_TBS.autoPass && !this.activeEntity().canMoveCommand() && this.activeEntity()._actionPerformed)
             this.processCommandPass();
         else
             LeUtilities.getScene().showCommandWindow();
     }
-    LeUtilities.getScene().showStatusWindow(this.activeBattler());
+    LeUtilities.getScene().showStatusWindow(this.activeEntity());
     var cell = this.activeEntity().getCell();
     this.setCursorCell(cell);
 
@@ -2502,20 +2899,27 @@ BattleManagerTBS.processCommandAttack = function () {
     this.drawAttackScope(this.activeEntity());
 };
 
-BattleManagerTBS.drawAttackScope = function (entity) {
+BattleManagerTBS.makeAttackScope = function (entity) {
     var data = entity.getAttackScopeData();
+    this.makeActionScope(entity, data);
+};
+
+BattleManagerTBS.drawAttackScope = function (entity) {
+    this.makeAttackScope(entity);
     this._actionScopeParam = {
         color: Lecode.S_TBS.attackColorCell,
+        scolor: Lecode.S_TBS.selectedAttackColorCell,
         opacity: Lecode.S_TBS.attackCellOpacity,
         invalidOpa: Lecode.S_TBS.attackInvalidCellOpacity
     };
-    this.drawActionScope(entity, data);
+    this.drawActionScope(entity);
     this.updateScopeSelection();
 };
 
 BattleManagerTBS.updateAttackSelection = function () {
     this._actionAoE = this.getAttackAoE();
-    this.drawActionSelection();
+    if (!(this._subPhase === "ai" && !Lecode.S_TBS.showScopes))
+        this.drawActionSelection();
 };
 
 BattleManagerTBS.getAttackAoE = function () {
@@ -2549,16 +2953,22 @@ BattleManagerTBS.onSkillSelected = function () {
     }
 };
 
-BattleManagerTBS.drawSkillScope = function (entity) {
-    var obj = this.activeAction().item();
+BattleManagerTBS.makeSkillScope = function (entity, obj) {
+    obj = obj || this.activeAction().item();
     var data = entity.getObjectScopeData(obj);
+    this.makeActionScope(entity, data);
+};
+
+BattleManagerTBS.drawSkillScope = function (entity) {
+    this.makeSkillScope(entity);
     this._actionScopeParam = {
         color: Lecode.S_TBS.skillColorCell,
+        scolor: Lecode.S_TBS.selectedSkillColorCell,
         opacity: Lecode.S_TBS.skillCellOpacity,
         invalidOpa: Lecode.S_TBS.skillInvalidCellOpacity,
         selectedOpacity: Lecode.S_TBS.skillSelectedCellOpacity
     };
-    this.drawActionScope(entity, data);
+    this.drawActionScope(entity);
     this.updateScopeSelection();
 };
 
@@ -2586,22 +2996,29 @@ BattleManagerTBS.onItemSelected = function () {
     }
 };
 
-BattleManagerTBS.drawItemScope = function (entity) {
-    var obj = this.activeAction().item();
+BattleManagerTBS.makeItemScope = function (entity, obj) {
+    obj = obj || this.activeAction().item();
     var data = entity.getObjectScopeData(obj);
+    this.makeActionScope(entity, data);
+};
+
+BattleManagerTBS.drawItemScope = function (entity) {
+    this.makeItemScope(entity);
     this._actionScopeParam = {
         color: Lecode.S_TBS.ItemColorCell,
+        scolor: Lecode.S_TBS.selectedItemColorCell,
         opacity: Lecode.S_TBS.ItemCellOpacity,
         invalidOpa: Lecode.S_TBS.ItemInvalidCellOpacity,
         selectedOpacity: Lecode.S_TBS.ItemSelectedCellOpacity
     };
-    this.drawActionScope(entity, data);
+    this.drawActionScope(entity);
     this.updateScopeSelection();
 };
 
 BattleManagerTBS.updateActionSelection = function () {
     this._actionAoE = this.getActionAoE();
-    this.drawActionSelection();
+    if (!(this._subPhase === "ai" && !Lecode.S_TBS.showScopes))
+        this.drawActionSelection();
 };
 
 BattleManagerTBS.getActionAoE = function () {
@@ -2659,57 +3076,126 @@ BattleManagerTBS.processAction = function () {
     var item = action.item();
     var entity = this.activeEntity();
     var id = action.isAttack() ? entity.getWeaponSequenceData() : entity.getObjectSequenceData(item);
+    var fastSequence = action.isAttack() ? entity.getWeaponFastSequence() : entity.getObjectFastSequence(item);
     this.activeBattler().useItem(item);
     action.applyGlobal();
-    entity.startSequence(id, action);
+    entity.onActionStart(id, fastSequence, action);
+    if (fastSequence.length > 0)
+        entity.startSequence(fastSequence, action);
+    else
+        entity.startSequence(id, action);
 };
 
-BattleManagerTBS.applyObjEffects = function (user, item, targets, hitAnim, animDelay) {
+BattleManagerTBS.processCounterAttack = function (targets, subject, action) {
+    if (!action) return;
+    this.setCursorCell(subject.getCell());
+    targets.forEach(function (entity) {
+        var dist = LeUtilities.distanceBetweenCells(subject.getCell(), entity.getCell());
+        if (dist <= 1 && Math.random() < action.itemCnt(entity.battler())) {
+            var skill = $dataSkills[entity.battler().attackSkillId()];
+            entity.lookAt(subject.getCell());
+            entity.startSequence("counter");
+            entity.executeAction(skill);
+        }
+    }.bind(this));
+};
+
+BattleManagerTBS.invokeObjEffects = function (user, item, targets, hitAnim, animDelay) {
     this.activeAction().setItemObject(item);
     this.prepareDirectionalDamageBonus(user, targets, item);
-    targets.forEach(function (target) {
-        this.activeAction().apply(target.battler());
-        if (target.battler().result().isHit()) {
-            if (hitAnim) {
-                var cell = target.getCell();
-                this.getLayer("animations").newAnimation(hitAnim, false, animDelay, cell, target._sprite);
-            }
-            if (target.battler().result().hpDamage > 0)
-                target.callSequence("damaged");
-        } else {
-            target.callSequence("evaded");
-        }
-        target.addPopup();
-        target.checkDeath();
-    }.bind(this));
+    this.applyObjEffects(user, targets, hitAnim, animDelay);
     this.resetDirectionalDamageBonus(targets);
     this.refreshBattlersStatus();
 };
 
-BattleManagerTBS.applyObjEffectsOnMap = function (user, item, cellTargets, hitAnim, animDelay) {
-    this.activeAction().setItemObject(item);
-    item = this.activeAction().item();
-    cellTargets.forEach(function (cell) {
-        var target = cell.getEntity();
-        var sprite;
-        if (target) {
-            this.prepareDirectionalDamageBonus(user, [target], item);
+BattleManagerTBS.applyObjEffects = function (user, targets, hitAnim, animDelay) {
+    targets.forEach(function (target) {
+        target.prepareExtraPopups();
+        if (Math.random() < this.activeAction().itemMrf(target.battler()))
+            this.processMagicReflection(user, target, hitAnim, animDelay);
+        else {
             this.activeAction().apply(target.battler());
             if (target.battler().result().isHit()) {
-                sprite = target._sprite;
+                if (hitAnim)
+                    target.newAnimation(hitAnim, false, animDelay);
                 if (target.battler().result().hpDamage > 0)
                     target.callSequence("damaged");
             } else {
                 target.callSequence("evaded");
             }
-            target.addPopup();
-            target.checkDeath();
-            this.resetDirectionalDamageBonus([target]);
+            target.applyObjChangeMovePoints(this.activeAction().item());
+            target.onDamage();
+        }
+    }.bind(this));
+};
+
+BattleManagerTBS.processMagicReflection = function (user, target, hitAnim, animDelay) {
+    var cell = target.getCell();
+    user.prepareExtraPopups();
+    target.newAnimation(178, false, 0);
+    this.activeAction().apply(user.battler());
+    if (user.battler().result().isHit()) {
+        if (hitAnim)
+            user.newAnimation(hitAnim, false, animDelay);
+        if (user.battler().result().hpDamage > 0)
+            user.callSequence("damaged");
+    } else {
+        user.callSequence("evaded");
+    }
+    user.applyObjChangeMovePoints(this.activeAction().item());
+    user.onDamage();
+};
+
+BattleManagerTBS.invokeObjEffectsOnMap = function (user, item, cellTargets, hitAnim, animDelay) {
+    this.applyObjEffectsOnMap(user, item, cellTargets, hitAnim, animDelay);
+    this.refreshBattlersStatus();
+};
+
+BattleManagerTBS.applyObjEffectsOnMap = function (user, item, cellTargets, hitAnim, animDelay) {
+    cellTargets.forEach(function (cell) {
+        var target = cell.getEntity();
+        var sprite;
+        if (target) {
+            if (Math.random() < this.activeAction().itemMrf(target.battler()))
+                this.processMagicReflectionOnMap(user, target, hitAnim, animDelay);
+            else {
+                this.prepareDirectionalDamageBonus(user, [target], item);
+                this.activeAction().apply(target.battler());
+                if (target.battler().result().isHit()) {
+                    sprite = target._sprite;
+                    if (target.battler().result().hpDamage > 0)
+                        target.callSequence("damaged");
+                } else {
+                    target.callSequence("evaded");
+                }
+                target.applyObjChangeMovePoints(this.activeAction().item());
+                target.onDamage();
+                this.resetDirectionalDamageBonus([target]);
+            }
         }
         if (hitAnim)
             this.getLayer("animations").newAnimation(hitAnim, false, animDelay, cell, sprite);
     }.bind(this));
-    this.refreshBattlersStatus();
+};
+
+BattleManagerTBS.processMagicReflectionOnMap = function (user, target, hitAnim, animDelay) {
+    var sprite;
+    var cell = user.getCell();
+    user.prepareExtraPopups();
+    this.prepareDirectionalDamageBonus(target, [user], item);
+    this.activeAction().apply(user.battler());
+    if (user.battler().result().isHit()) {
+        sprite = user._sprite;
+        if (user.battler().result().hpDamage > 0)
+            user.callSequence("damaged");
+    } else {
+        user.callSequence("evaded");
+    }
+    user.applyObjChangeMovePoints(this.activeAction().item());
+    user.onDamage();
+    this.resetDirectionalDamageBonus([target]);
+    if (hitAnim)
+        this.getLayer("animations").newAnimation(hitAnim, false, animDelay, cell, sprite);
 };
 
 BattleManagerTBS.applyFloatingDamage = function (amount, target) {
@@ -2730,12 +3216,12 @@ BattleManagerTBS.onActionEnd = function () {
     this.setCursorCell(cell);
     Input.clear();
     this.activeEntity()._actionPerformed = true;
-    LeUtilities.getScene().showStatusWindow(this.activeBattler());
+    LeUtilities.getScene().showStatusWindow(this.activeEntity());
 
     var obj = this.activeAction().item();
     if (this.activeEntity().passAfterObjUse(obj))
         this.processCommandPass();
-    else if (this.activeBattler().isActor()) {
+    else if (!this.activeEntity().playableByAI()) {
         if (Lecode.S_TBS.autoPass && !this.activeEntity().canMoveCommand())
             this.processCommandPass();
         else
@@ -2751,7 +3237,7 @@ BattleManagerTBS.onActionEnd = function () {
 BattleManagerTBS.processCommandPass = function () {
     var entity = this.activeEntity();
     var cell = entity.getCell();
-    if (this.activeBattler().isActor() && Lecode.S_TBS.enableDirectionalFacing) {
+    if (!this.activeEntity().playableByAI() && Lecode.S_TBS.enableDirectionalFacing) {
         this._subPhase = "directionSelector_input";
         this._beforePassDir = entity.getDir();
         this._directionSelector.set(cell, entity);
@@ -2821,10 +3307,6 @@ BattleManagerTBS.updateEvents = function () {
 
 BattleManagerTBS.nextTurn = function () {
     do {
-        if (this._activeIndex === 0) {
-            $gameTroop.increaseTurn();
-            this.onNewTurnOrder();
-        }
         this._activeIndex++;
         if (this._activeIndex >= this._turnOrder.length) {
             this._activeIndex = 0;
@@ -2835,11 +3317,8 @@ BattleManagerTBS.nextTurn = function () {
     this.startTurn();
 };
 
-BattleManagerTBS.onNewTurnOrder = function () {
-
-};
-
 BattleManagerTBS.onTurnOrderEnd = function () {
+    $gameTroop.increaseTurn();
     this.executeEventsAtTurnOrderEnd();
 };
 
@@ -2897,7 +3376,9 @@ BattleManagerTBS.checkDefeatAndVictory = function () {
 };
 
 BattleManagerTBS.canPrepareDefeat = function () {
-    return $gameParty.isAllDead();
+    return this.allyEntities().every(function (entity) {
+        return entity.battler().isDead();
+    });
 };
 
 BattleManagerTBS.canPrepareVictory = function () {
@@ -3009,21 +3490,35 @@ BattleManagerTBS.onEntityRevive = function (entity) {
     this._turnOrderVisual.updateOnEntityRevive(this._turnOrder, this._activeIndex);
 };
 
+BattleManagerTBS.destroyEntity = function (entity) {
+    entity.destroy();
+    LeUtilities.removeInArray(this._battlerEntities, entity);
+    LeUtilities.removeInArray(this._neutralEntities, entity);
+};
 
-
-BattleManagerTBS.drawActionScope = function (entity, data) {
+BattleManagerTBS.makeActionScope = function (entity, data, obj, isFloating) {
     var center = entity.getCell().toCoords();
-    var color = this._actionScopeParam.color;
-    var opacity = this._actionScopeParam.opacity;
-    var invalidOpa = this._actionScopeParam.invalidOpa;
-    var param = this.makeObjScopeParam(null, entity, center);
+    var param = this.makeObjScopeParam(obj, entity, center);
     var scope = this.getScopeFromData(data, center, param);
-    var invalidCondition = "!cell._scopeVisible || (cell.isObstacleForLOS() && !cell.isThereEntity())";
-    this.getLayer("scopes").clear();
-    this.drawScope(scope, color, opacity, invalidOpa, invalidCondition);
+    if (isFloating) {
+        return {
+            cells: scope,
+            center: center
+        };
+    }
     this._actionScope = {};
     this._actionScope.cells = scope;
     this._actionScope.center = center;
+};
+
+BattleManagerTBS.drawActionScope = function (entity) {
+    var color = this._actionScopeParam.color;
+    var opacity = this._actionScopeParam.opacity;
+    var invalidOpa = this._actionScopeParam.invalidOpa;
+    var scope = this._actionScope.cells;
+    var invalidCondition = "!cell._scopeVisible || (cell.isObstacleForLOS() && !cell.isThereEntity())";
+    this.getLayer("scopes").clear();
+    this.drawScope(scope, color, opacity, invalidOpa, invalidCondition);
 };
 
 BattleManagerTBS.makeObjScopeParam = function (obj, entity, center) {
@@ -3045,7 +3540,7 @@ BattleManagerTBS.makeObjScopeParam = function (obj, entity, center) {
         else if (arg.match(/through_obstacles/i))
             param.line_of_sight = false;
         else if (arg.match(/need_free_cell/i))
-            param.need_free_cells = true;
+            param.need_free_cell = true;
     }.bind(this));
     return param;
 };
@@ -3068,6 +3563,8 @@ BattleManagerTBS.makeObjAoEParam = function (obj, entity, center) {
             param.remove_nonvisibleCells = true;
         } else if (arg.match(/exclude_center/i)) {
             param.exclude_center = true;
+        } else if (arg.match(/need_free_cell/i)) {
+            param.need_free_cell = true;
         }
     }.bind(this));
     return param;
@@ -3089,22 +3586,16 @@ BattleManagerTBS.cursorOnActionScope = function () {
 BattleManagerTBS.drawActionSelection = function () {
     this.clearActionSelection();
     var color = this._actionScopeParam.color;
+    var scolor = this._actionScopeParam.scolor;
     var opacity;
     var invalidOpa = this._actionScopeParam.invalidOpa;
     if (this._requestSpecialSelection) {
         var aoe = this._requestSpecialSelection.aoe;
         opacity = invalidOpa;
-        for (var i = 0; i < aoe.length; i++) {
-            var cell = aoe[i];
-            this.getLayer("scopes").drawSelectionCell(cell.x, cell.y, opacity, color);
-        }
+        this.getLayer("scopes").drawSelectionCells(aoe, opacity, color, scolor);
     }
     opacity = this._actionScopeParam.selectedOpacity;
-    for (var i = 0; i < this._actionAoE.length; i++) {
-        var cell = this._actionAoE[i];
-        this.getLayer("scopes").drawSelectionCell(cell.x, cell.y, opacity, color);
-    }
-
+    this.getLayer("scopes").drawSelectionCells(this._actionAoE, opacity, color, scolor);
 };
 
 BattleManagerTBS.clearActionSelection = function () {
@@ -3113,15 +3604,33 @@ BattleManagerTBS.clearActionSelection = function () {
 
 BattleManagerTBS.getScopeFromData = function (data, center, param, points) {
     var scope = [];
+    var str, min, size;
+
+    var e = param.user;
+    if (e)
+        var a = e.battler();
+
+    if (data.match(/(circle|line|square|cross)\((.+)\)/i)) {
+        if (RegExp.$2.includes(",")) {
+            str = RegExp.$2.split(",");
+            size = Math.floor(Number(eval(str[0])));
+            min = Math.floor(Number(eval(str[1])));
+        } else {
+            size = Math.floor(Number(eval(RegExp.$2)));
+        }
+    }
+
     if (data.match(/custom\((.+)\)/i)) {
         var scopeData = Lecode.S_TBS.Config.Custom_Scopes[String(RegExp.$1)];
         scope = this.getScopeFromRawData(scopeData, center, param);
     } else if (data.match(/circle\((.+)\)/i)) {
-        scope = this.makeCircleScope(center, Number(RegExp.$1), param, points);
+        scope = this.makeCircleScope(center, size, min, param);
     } else if (data.match(/line\((.+)\)/i)) {
-        scope = this.makeLineScope(center, Number(RegExp.$1), param, points);
+        scope = this.makeLineScope(center, size, min, param);
     } else if (data.match(/square\((.+)\)/i)) {
-        scope = this.makeSquareScope(center, Number(RegExp.$1), param, points);
+        scope = this.makeSquareScope(center, size, min, param);
+    } else if (data.match(/cross\((.+)\)/i)) {
+        scope = this.makeCrossScope(center, size, min, param);
     } else if (data.match(/path/i)) {
         scope = this.makePathScope(param);
     } else {
@@ -3162,8 +3671,7 @@ BattleManagerTBS.getScopeFromRawData = function (scopeData, center, param) {
     return LeUtilities.uniqArray(scope);
 };
 
-BattleManagerTBS.makeCircleScope = function (center, range, param, points) {
-    points = points || range;
+BattleManagerTBS.makeCircleScope = function (center, range, min, param) {
     var cells = [];
     var start = param.exclude_center ? 1 : 0;
     var x = center.x,
@@ -3180,11 +3688,16 @@ BattleManagerTBS.makeCircleScope = function (center, range, param, points) {
             cells.push(this.getCellAt(x + i, y + a));
         }
     }
+    if (min) {
+        var minCells = this.makeCircleScope(center, min, null, param);
+        cells = cells.filter(function (cell) {
+            return !this.isCellInScope(cell, minCells);
+        }.bind(this));
+    }
     return cells;
 };
 
-BattleManagerTBS.makeSquareScope = function (center, range, param, points) {
-    points = points || range;
+BattleManagerTBS.makeSquareScope = function (center, range, min, param) {
     var cells = [];
     var x = center.x,
         y = center.y;
@@ -3195,13 +3708,19 @@ BattleManagerTBS.makeSquareScope = function (center, range, param, points) {
             cells.push(this.getCellAt(x + i, y + j));
         }
     }
+    if (min) {
+        var minCells = this.makeSquareScope(center, min, null, param);
+        cells = cells.filter(function (cell) {
+            return !this.isCellInScope(cell, minCells);
+        }.bind(this));
+    }
     return cells;
 };
 
-BattleManagerTBS.makeLineScope = function (center, range, param, points) {
-    points = points || range;
+BattleManagerTBS.makeLineScope = function (center, range, min, param) {
     var cells = [];
     var start = param.exclude_center ? 1 : 0;
+    start = min || start;
     var x = center.x,
         y = center.y;
     for (var i = start; i <= range; i++) {
@@ -3210,11 +3729,16 @@ BattleManagerTBS.makeLineScope = function (center, range, param, points) {
         cells.push(this.getCellAt(x, y + i));
         cells.push(this.getCellAt(x, y - i));
     }
+    if (min) {
+        var minCells = this.makeLineScope(center, min, null, param);
+        cells = cells.filter(function (cell) {
+            return !this.isCellInScope(cell, minCells);
+        }.bind(this));
+    }
     return cells;
 };
 
-BattleManagerTBS.makeCrossScope = function (center, range, param, points) {
-    points = points || range;
+BattleManagerTBS.makeCrossScope = function (center, range, param) {
     var cells = [];
     var start = param.exclude_center ? 1 : 0;
     var x = center.x,
@@ -3224,6 +3748,12 @@ BattleManagerTBS.makeCrossScope = function (center, range, param, points) {
         cells.push(this.getCellAt(x + i, y - i));
         cells.push(this.getCellAt(x - i, y + i));
         cells.push(this.getCellAt(x - i, y - i));
+    }
+    if (min) {
+        var minCells = this.makeCrossScope(center, min, null, param);
+        cells = cells.filter(function (cell) {
+            return !this.isCellInScope(cell, minCells);
+        }.bind(this));
     }
     return cells;
 };
@@ -3257,7 +3787,7 @@ BattleManagerTBS.applyParamToScope = function (cells, center, points, param) {
                 cells = this.makeScopeVisible(cells, center);
         }
     }
-    if (param.need_free_cells) {
+    if (param.need_free_cell) {
         cells = this.removeObstaclesFromScope(cells);
         cells = this.removeEntitiesFromScope(cells);
     }
@@ -3478,12 +4008,15 @@ BattleManagerTBS.makeScopeVisible = function (cells, center) {
 };
 
 BattleManagerTBS.getScopeBoundaries = function (cells) {
-    var cellsByX = cells.sort(function (cellA, cellB) {
+    var copy = cells.filter(function (cell) {
+        return true;
+    });
+    var cellsByX = copy.sort(function (cellA, cellB) {
         return (cellA.x > cellB.x) ? 1 : ((cellA.x < cellB.x) ? -1 : 0);
     });
     var rightCell = cellsByX.leU_last();
     var leftCell = cellsByX[0];
-    var cellsByY = cells.sort(function (cellA, cellB) {
+    var cellsByY = copy.sort(function (cellA, cellB) {
         return (cellA.y > cellB.y) ? 1 : ((cellA.y < cellB.y) ? -1 : 0);
     });
     var bottomCell = cellsByY.leU_last();
@@ -3496,12 +4029,12 @@ BattleManagerTBS.getScopeBoundaries = function (cells) {
     };
 };
 
-BattleManagerTBS.getPathFromAToB = function (sx, sy, dx, dy, gridType) {
+BattleManagerTBS.getPathFromAToB = function (sx, sy, dx, dy, gridType, cellsToIgnore) {
     var path = [];
     var pathResult = null;
     var grid;
     if (gridType === "walkable")
-        grid = this.getWalkableGridForEasyStar();
+        grid = this.getWalkableGridForEasyStar(cellsToIgnore);
     else if (gridType === "free")
         grid = this.getFreeGridForEasyStar();
     else
@@ -3555,13 +4088,13 @@ BattleManagerTBS.getFreeGridForEasyStar = function () {
     return grid;
 };
 
-BattleManagerTBS.getWalkableGridForEasyStar = function () {
+BattleManagerTBS.getWalkableGridForEasyStar = function (cellsToIgnore) {
+    cellsToIgnore = cellsToIgnore || [];
     var grid = [];
     for (var y = 0; y < $gameMap.height(); y++) {
         var arr = [];
         for (var x = 0; x < $gameMap.width(); x++) {
             var cell = this.getCellAt(x, y);
-            if (cell) {
                 var entity = cell.getEntity();
                 if (entity) {
                     arr.push(entity.isPassable() ? 0 : 1);
@@ -3605,6 +4138,26 @@ BattleManagerTBS.getEntitiesInScope = function (scope) {
             entities.push(entity);
     }
     return entities;
+};
+
+BattleManagerTBS.closestWalkableCellTo = function (cellTarget, scope) {
+    return scope.sort(function (a, b) {
+        var obj_aPath = this.getPathFromAToB(a.x, a.y, cellTarget.x, cellTarget.y, "walkable", [cellTarget]);
+        var obj_bPath = this.getPathFromAToB(b.x, b.y, cellTarget.x, cellTarget.y, "walkable", [cellTarget]);
+        var obj_aDist = obj_aPath.length === 0 ? 999 : obj_aPath.length;
+        var obj_bDist = obj_bPath.length === 0 ? 999 : obj_bPath.length;
+        return (obj_aDist > obj_bDist) ? 1 : ((obj_aDist < obj_bDist) ? -1 : 0);
+    }.bind(this))[0];
+};
+
+BattleManagerTBS.farthestWalkableCellTo = function (cellTarget, scope) {
+    return scope.sort(function (a, b) {
+        var obj_aPath = this.getPathFromAToB(a.x, a.y, cellTarget.x, cellTarget.y, "walkable", [cellTarget]);
+        var obj_bPath = this.getPathFromAToB(b.x, b.y, cellTarget.x, cellTarget.y, "walkable", [cellTarget]);
+        var obj_aDist = obj_aPath.length === 0 ? 999 : obj_aPath.length;
+        var obj_bDist = obj_bPath.length === 0 ? 999 : obj_bPath.length;
+        return (obj_aDist > obj_bDist) ? 1 : ((obj_aDist < obj_bDist) ? -1 : 0);
+    }.bind(this)).pop();
 };
 
 BattleManagerTBS.processCollisionEffects = function (entity) {
@@ -3741,13 +4294,13 @@ BattleManagerTBS.executeEventsByForce = function (id) {
 
 BattleManagerTBS.allyStartCells = function () {
     return this._startCells.filter(function (cell) {
-        return cell._type === "ally";
+        return cell._positioningData.type === "actor";
     });
 };
 
 BattleManagerTBS.enemyStartCells = function () {
     return this._startCells.filter(function (cell) {
-        return cell._type === "enemy";
+        return cell._positioningData.type === "enemy";
     });
 };
 
@@ -3846,8 +4399,40 @@ BattleManagerTBS.getFlaggedEntity = function (flagId) {
     return null;
 };
 
-BattleManagerTBS.canEndPlacementPhase = function () {
-    return this._actorsToPlace.length === 0;
+BattleManagerTBS.getCellAwayParty = function (scope, party) {
+    var results = [];
+    for (var j = 0; j < scope.length; j++) {
+        var cell = scope[j];
+        var data = {
+            dist: 0,
+            cell: cell
+        };
+        for (var i = 0; i < party.length; i++) {
+            var entity = party[i];
+            var dist = LeUtilities.distanceBetweenCells(cell, entity.getCell());
+            data.dist += dist;
+        }
+        results.push(data);
+    }
+    return LeUtilities.getMaxInArrayBy(results, "dist").cell;
+};
+
+BattleManagerTBS.getCellTowardParty = function (scope, party) {
+    var results = [];
+    for (var j = 0; j < scope.length; j++) {
+        var cell = scope[j];
+        var data = {
+            dist: 0,
+            cell: cell
+        };
+        for (var i = 0; i < party.length; i++) {
+            var entity = party[i];
+            var dist = LeUtilities.distanceBetweenCells(cell, entity.getCell());
+            data.dist += dist;
+        }
+        results.push(data);
+    }
+    return LeUtilities.getMinInArrayBy(results, "dist").cell;
 };
 
 BattleManagerTBS.centerActiveCell = function () {
@@ -3855,13 +4440,7 @@ BattleManagerTBS.centerActiveCell = function () {
 };
 
 BattleManagerTBS.centerCell = function (cell) {
-    var oldX = $gameMap._displayX;
-    var oldY = $gameMap._displayY;
-    var oldPX = $gameMap._parallaxX;
-    var oldPY = $gameMap._parallaxY;
     $gamePlayer.center(cell.x, cell.y);
-    this.adaptLayersPos();
-    this.adaptMapVisuals(oldX, oldY, oldPX, oldPY);
 };
 
 BattleManagerTBS.scrollRight = function (distance) {
@@ -3870,8 +4449,6 @@ BattleManagerTBS.scrollRight = function (distance) {
     var oldPX = $gameMap._parallaxX;
     var oldPY = $gameMap._parallaxY;
     $gameMap.setDisplayPos(oldX + distance, oldY);
-    this.adaptLayersPos();
-    this.adaptMapVisuals(oldX, oldY, oldPX, oldPY);
 };
 
 BattleManagerTBS.scrollDown = function (distance) {
@@ -3880,8 +4457,6 @@ BattleManagerTBS.scrollDown = function (distance) {
     var oldPX = $gameMap._parallaxX;
     var oldPY = $gameMap._parallaxY;
     $gameMap.setDisplayPos(oldX, oldY + distance);
-    this.adaptLayersPos();
-    this.adaptMapVisuals(oldX, oldY, oldPX, oldPY);
 };
 
 BattleManagerTBS.scrollLeft = function (distance) {
@@ -3891,7 +4466,7 @@ BattleManagerTBS.scrollLeft = function (distance) {
 BattleManagerTBS.scrollUp = function (distance) {
     this.scrollDown(-distance);
 };
-
+/*
 BattleManagerTBS.adaptLayersPos = function () {
     this.movableLayers().forEach(function (layer) {
         layer.x = -$gameMap._displayX * $gameMap.tileWidth();
@@ -3909,16 +4484,16 @@ BattleManagerTBS.adaptMapVisuals = function (oldX, oldY, oldPX, oldPY) {
     $gameMap._parallaxX = oldPX;
     $gameMap._parallaxY = oldPY;
 };
-
+*/
 BattleManagerTBS.movableLayers = function () {
-    return [this.getLayer("scopes"), this.getLayer("ground"), this.getLayer("groundEntities"), this.getLayer("battlers"),
-    this.getLayer("animations"), this.getLayer("movableInfo")
+    return [this.getLayer("scopes"), this.getLayer("ground"), this.getLayer("groundEntities"),
+    this.getLayer("battlers"), this.getLayer("animations"), this.getLayer("movableInfo")
     ];
 };
 
 BattleManagerTBS.mapVisuals = function () {
     var scene = LeUtilities.getScene();
-    return [scene._windowPlacement, scene._windowCommand, scene._windowSkill, scene._windowItem];
+    return [scene._windowPositioningInfo, scene._windowCommand, scene._windowSkill, scene._windowItem];
 };
 
 
@@ -3937,7 +4512,7 @@ TBSAiManager.prototype.initialize = function () {
     this._targetData = null;
     this._cellTarget = null;
     this._failureCode = "";
-    this._actionData = null;
+    this._constructionDelay = 0;
 };
 
 TBSAiManager.prototype.process = function (entity) {
@@ -3945,76 +4520,364 @@ TBSAiManager.prototype.process = function (entity) {
     this._battler = entity._battler;
     this._phase = 0;
     this._commands = this.getBehavior().slice();
+    this._commandRunning = null;
     this._commandNextPhaseCallBack = null;
     this._commandExtraData = {};
+    this._actionBuilding = {};
+    this._actionData = null;
+    this._actionDataType = null;
+    this._builtData = {};
+    this._isBuilding = true;
+    this._builtData["offense"] = null;
+    this._builtData["healing"] = null;
+    this._builtData["support"] = null;
+    this._builtData["move"] = null;
+    this._builtData["summon"] = null;
+    this._commandPhase = "init";
     this.makeOffenseData();
+    this.makeHealingData();
+    this.makeSupportData();
+    this.makeMoveData();
+    this.makeSummonData();
+    this.updateEscapeCooldown();
+    this.updateSupportCooldown();
+};
+
+TBSAiManager.prototype.updateEscapeCooldown = function () {
+    if (!this._entity._aiEscapeCount)
+        this._entity._aiEscapeCount = 0;
+    if (this._entity._aiEscapeCount > 0)
+        this._entity._aiEscapeCount--;
+};
+
+TBSAiManager.prototype.updateSupportCooldown = function () {
+    if (!this._entity._aiSupportCount)
+        this._entity._aiSupportCount = 0;
+    if (this._entity._aiSupportCount > 0)
+        this._entity._aiSupportCount--;
 };
 
 TBSAiManager.prototype.makeOffenseData = function () {
-    this._commandPhase = "making_offense_data";
-    this._construction = {};
-    var user = this._battler;
-    var entity = this._entity;
-    var center = entity.getCell().toCoords();
-    var enemies = this.getEnemiesOf(user, true);
-    var movePoints = entity.getMovePoints();
-    var skills = this.getUsableSkills(user);
-    //- console.log("====- ", entity.battler().name()," -====");
-
-    this._construction.offenses = [];
-    this._construction.offenseData = [];
-
+    var party = this.getEnemiesOf(this._battler, true);
+    var skills = this.getUsableSkills(this._battler);
+    var objects = [];
     for (var i = 0; i < skills.length; i++) {
         var skill = skills[i];
-        if (skill.id === user.attackSkillId() || skill.leTbs_aiOffenseType) {
-            this._construction.offenses.push(skill);
+        if (!this._entity.rpgObject().leTbs_aiNoAttack && skill.id === this._battler.attackSkillId() || skill.leTbs_aiConfig.type.match("offense")) {
+            objects.push(skill);
         }
     }
-    //- console.log("this._construction.offenses:" ,this._construction.offenses);
+    this.makeActionData("offense", party, objects);
+};
 
-    this._construction.enemies = enemies.sort(function (enta, entb) {
+TBSAiManager.prototype.makeHealingData = function () {
+    var party = this.getAlliesOf(this._battler, false);
+    party.push(this._entity);
+    var skills = this.getUsableSkills(this._battler);
+    var objects = [];
+    for (var i = 0; i < skills.length; i++) {
+        var skill = skills[i];
+        if (skill.leTbs_aiConfig.type.match("healing")) {
+            objects.push(skill);
+        }
+    }
+    this.makeActionData("healing", party, objects);
+};
+
+TBSAiManager.prototype.makeSupportData = function () {
+    var party = this.getAlliesOf(this._battler, false);
+    party.push(this._entity);
+    var skills = this.getUsableSkills(this._battler);
+    var objects = [];
+    for (var i = 0; i < skills.length; i++) {
+        var skill = skills[i];
+        if (skill.leTbs_aiConfig.type.match("support")) {
+            objects.push(skill);
+        }
+    }
+    this.makeActionData("support", party, objects);
+};
+
+TBSAiManager.prototype.makeMoveData = function () {
+    var skills = this.getUsableSkills(this._battler);
+    var objects = [];
+    for (var i = 0; i < skills.length; i++) {
+        var skill = skills[i];
+        if (skill.leTbs_aiConfig.type.match("move")) {
+            objects.push(skill);
+        }
+    }
+    this.makeActionData("move", [], objects);
+};
+
+TBSAiManager.prototype.makeSummonData = function () {
+    var skills = this.getUsableSkills(this._battler);
+    var objects = [];
+    for (var i = 0; i < skills.length; i++) {
+        var skill = skills[i];
+        if (skill.leTbs_aiConfig.type.match("summon")) {
+            objects.push(skill);
+        }
+    }
+    this.makeActionData("summon", [], objects);
+};
+
+TBSAiManager.prototype.updateOffenseActionsBuilding = function () {
+    this.updateActionsBuilding("offense", "nbrEnemies");
+};
+
+TBSAiManager.prototype.updateHealingActionsBuilding = function () {
+    this.updateActionsBuilding("healing", "nbrAllies");
+};
+
+TBSAiManager.prototype.updateSupportActionsBuilding = function () {
+    this.updateActionsBuilding("support", "nbrAllies");
+};
+
+TBSAiManager.prototype.updateMoveActionsBuilding = function () {
+    this.updateMoveActionsBuilding();
+};
+
+TBSAiManager.prototype.updateSummonActionsBuilding = function () {
+    this.updateSummonActionsBuilding();
+};
+
+TBSAiManager.prototype.makeActionData = function (type, party, skills) {
+    this._actionBuilding[type] = {};
+    this._actionBuilding[type].objects = skills;
+    this._actionBuilding[type].data = [];
+    var entity = this._entity;
+
+    this._actionBuilding[type].party = party.sort(function (enta, entb) {
         var cellaDist = LeUtilities.distanceBetween(enta, entity);
         var cellbDist = LeUtilities.distanceBetween(entb, entity);
         return (cellaDist > cellbDist) ? 1 : ((cellaDist < cellbDist) ? -1 : 0);
     });
 };
 
-TBSAiManager.prototype.updateOffenseData = function () {
-    var enemy = this._construction.enemies.shift();
-    if (enemy) {
-        //- console.log("-- ", enemy.battler().name());
-        var offenses = this._construction.offenses;
-        var entity = this._entity;
-        var center = entity.getCell().toCoords();
+TBSAiManager.prototype.updateMoveActionsBuilding = function () {
+    var object = this._actionBuilding["move"].objects.shift();
+    var user = this._battler;
+    var enemies = this.getEnemiesOf(user, false);
+    var allies = this.getEnemiesOf(user, false);
+    var entity = this._entity;
+    var center = entity.getCell().toCoords();
+    var a = entity.battler();
 
-        for (var i = 0; i < offenses.length; i++) {
-            var offense = offenses[i];
-            //- console.log("offense.name:" ,offense.name);
-            var cellToMoveTo = this.getCellToMoveToForAction(entity, enemy, offense, center);
-            //- console.log("cellToMoveTo:" ,cellToMoveTo);
-            if (cellToMoveTo) {
-                var action = {};
-                var reqMp = LeUtilities.distanceBetweenCells(entity.getCell(), cellToMoveTo);
-                action.requiredMp = reqMp;
-                action.cellToMoveTo = cellToMoveTo;
-                action.target = enemy;
-                action.userCell = entity.getCell();
-                action.obj = offense;
-                this._construction.offenseData.push(action);
+    if (!object) {
+        this._builtData["move"] = this._actionBuilding["move"].data;
+        return;
+    }
+
+    var data = object.id === user.attackSkillId() ? entity.getAttackScopeData() : entity.getObjectScopeData(object);
+    var param = this.BM().makeObjScopeParam(object, entity, center);
+    var scope = this.BM().getScopeFromData(data, center, param).filter(function (cell) {
+        return cell._scopeVisible;
+    });
+    var closestCellToEnemy = BattleManagerTBS.getCellTowardParty(scope, this.getEnemiesOf(this._battler, true));
+    var farthestCellToEnemy = BattleManagerTBS.getCellAwayParty(scope, this.getEnemiesOf(this._battler, true));
+
+    var action = {};
+    action.type = "move";
+    action.cellToMoveTo = entity.getCell();
+    action.userCell = entity.getCell();
+    action.cellTarget = null;
+    action.obj = object;
+    action.targets = [];
+    action.nbrTargets = 0;
+    var a = entity.battler();
+    if (eval(object.leTbs_aiConfig.escape_condition)) {
+        action.escapeCellTarget = farthestCellToEnemy;
+        action.escapeDistance = LeUtilities.distanceBetween(center, farthestCellToEnemy);
+    } else {
+        action.escapeCellTarget = null;
+        action.escapeDistance = 0;
+    }
+    if (eval(object.leTbs_aiConfig.rush_condition)) {
+        action.rushCellTarget = closestCellToEnemy;
+        action.rushDistance = LeUtilities.distanceBetween(center, closestCellToEnemy);
+    } else {
+        action.rushCellTarget = null;
+        action.rushDistance = 0;
+    }
+    this._actionBuilding["move"].data.push(action);
+};
+
+TBSAiManager.prototype.updateSummonActionsBuilding = function () {
+    var object = this._actionBuilding["summon"].objects.shift();
+    var user = this._battler;
+    var enemies = this.getEnemiesOf(user, false);
+    var allies = this.getEnemiesOf(user, false);
+    var entity = this._entity;
+    var center = entity.getCell().toCoords();
+    var a = entity.battler();
+
+    if (!object) {
+        this._builtData["summon"] = this._actionBuilding["summon"].data;
+        return;
+    }
+
+    var data = object.id === user.attackSkillId() ? entity.getAttackScopeData() : entity.getObjectScopeData(object);
+    var param = this.BM().makeObjScopeParam(object, entity, center);
+    var scope = this.BM().getScopeFromData(data, center, param).filter(function (cell) {
+        return cell._scopeVisible;
+    });
+    var closestCellToEnemy = BattleManagerTBS.getCellTowardParty(scope, this.getEnemiesOf(this._battler, true));
+    var closestCellToAlly = BattleManagerTBS.getCellTowardParty(scope, this.getAlliesOf(this._battler, true));
+    var closestCellToCaster = BattleManagerTBS.getCellTowardParty(scope, [entity]);
+
+    var action = {};
+    action.type = "summon";
+    action.cellToMoveTo = entity.getCell();
+    action.userCell = entity.getCell();
+    action.obj = object;
+    action.targets = [];
+    action.nbrTargets = 0;
+    var summonNear = object.leTbs_aiConfig.summon_near;
+    switch (summonNear) {
+        case "caster":
+            action.cellTarget = closestCellToCaster;
+            break;
+        case "enemies":
+            action.cellTarget = closestCellToEnemy;
+            break;
+        case "allies":
+            action.cellTarget = closestCellToAlly;
+            break;
+    }
+    this._actionBuilding["summon"].data.push(action);
+};
+
+TBSAiManager.prototype.updateActionsBuilding = function (type, nbrMembers) {
+    var object = this._actionBuilding[type].objects.shift();
+    var party = this._actionBuilding[type].party;
+    var entity = this._entity;
+    var center = entity.getCell().toCoords();
+    var a = entity.battler();
+    var opNbrMembers = nbrMembers === "nbrEnemies" ? "nbrAllies" : "nbrEnemies";
+
+    if (!object) {
+        this._builtData[type] = this._actionBuilding[type].data;
+        return;
+    }
+
+    //- Handle AOEs
+    if (object.leTbs_aiConfig.maximise_targets) {
+        var possibilities = this.getAoEPossibleMoves(entity, object, center)
+            .sort(function (p1, p2) {
+                return (p1[nbrMembers] > p2[nbrMembers]) ? -1 : ((p1[nbrMembers] < p2[nbrMembers]) ? 1 : 0);
+            });
+        if (possibilities.length === 0) return;
+        //- If the best move sorted by number of members has only one member,
+        //- discard the possibilities where an ally is also targeted (it won't make sens otherwise)
+        //- OR simply avoid friendly fire based on the config %
+        if (type === "offense" && possibilities[0][nbrMembers] === 1
+            || Math.random() < object.leTbs_aiConfig.avoid_friendly_fire) {
+            possibilities = possibilities.filter(function (p) {
+                return p[opNbrMembers] === 0;
+            });
+            if (possibilities.length === 0) return;
+        }
+        //- Keep possibilities with best nbr of members
+        var best = possibilities[0][nbrMembers];
+        possibilities = possibilities.filter(function (p) {
+            return p[nbrMembers] === best;
+        });
+        //- Sort by average hpRate of the targets in the AOE
+        if (possibilities.length > 1) {
+            possibilities = possibilities.sort(function (p1, p2) {
+                var avgHpRate1 = LeUtilities.avgOfArray(
+                    p1.targets.map(function (ent) {
+                        return ent.battler().hpRate();
+                    }.bind(this))
+                );
+                var avgHpRate2 = LeUtilities.avgOfArray(
+                    p2.targets.map(function (ent) {
+                        return ent.battler().hpRate();
+                    }.bind(this))
+                );
+                return avgHpRate1 - avgHpRate2;
+            }.bind(this));
+        }
+        //- Keep possibilities with lowest hpRate
+        best = LeUtilities.avgOfArray(
+            possibilities[0].targets.map(function (ent) {
+                return ent.battler().hpRate();
+            }.bind(this))
+        );
+        possibilities = possibilities.filter(function (p) {
+            var avgHpRate = LeUtilities.avgOfArray(
+                p.targets.map(function (ent) {
+                    return ent.battler().hpRate();
+                }.bind(this))
+            );
+            return avgHpRate === best;
+        }.bind(this));
+        //- Sort by lowest requiredMp
+        possibilities = possibilities.sort(function (p1, p2) {
+            var req1 = LeUtilities.distanceBetweenCells(entity.getCell(), p1.moveCell);
+            var req2 = LeUtilities.distanceBetweenCells(entity.getCell(), p2.moveCell);
+            return req1 - req2;
+        }.bind(this));
+
+        //- Keep possibilities where at least one target matches the use condition
+        possibilities = possibilities.filter(function (p) {
+            for (var i = 0; i < p.targets.length; i++) {
+                var target = p.targets[i];
+                var b = target.battler();
+                if (eval(object.leTbs_aiConfig.use_condition))
+                    return true;
+            }
+        });
+
+        var move = possibilities[0];
+        if (!move) return;
+        var action = {};
+        action.type = type;
+        action.requiredMp = LeUtilities.distanceBetweenCells(entity.getCell(), move.moveCell);
+        action.cellToMoveTo = move.moveCell;
+        action.cellTarget = move.actionCell;
+        action.userCell = entity.getCell();
+        action.obj = object;
+        action.targets = move.targets;
+        action.nbrTargets = move[nbrMembers];
+        this._actionBuilding[type].data.push(action);
+    }
+    //- If maximising targets isn't required (faster)
+    else {
+        for (var i = 0; i < party.length; i++) {
+            var member = party[i];
+            var b = member.battler();
+            if (eval(object.leTbs_aiConfig.use_condition)) {
+                var cellToMoveTo = this.getCellToMoveToForAction(entity, member.getCell(), object, center);
+                if (cellToMoveTo) {
+                    var action = {};
+                    action.type = type;
+                    action.requiredMp = LeUtilities.distanceBetweenCells(entity.getCell(), cellToMoveTo);
+                    action.cellToMoveTo = cellToMoveTo;
+                    action.cellTarget = member.getCell();
+                    action.userCell = entity.getCell();
+                    action.obj = object;
+                    action.targets = [member];
+                    action.nbrTargets = 1;
+                    this._actionBuilding[type].data.push(action);
+                }
             }
         }
-    } else {
-        this._offenseData = this._construction.offenseData;
-        this._commandPhase = "init";
     }
 };
 
-TBSAiManager.prototype.getClosestActionCellToTarget = function (target, obj, center) {
+TBSAiManager.prototype.getClosestActionCellToTarget = function (cellTarget, obj, center) {
     var entity = this._entity;
     var data = obj.id === entity._battler.attackSkillId() ? entity.getAttackScopeData() : entity.getObjectScopeData(obj);
     var param = this.BM().makeObjScopeParam(obj, entity, center);
     var scope = this.BM().getScopeFromData(data, center, param);
-    var closestCell = LeUtilities.closestByDistance(target.getCell(), scope);
+    if (this.BM().isCellInScope(cellTarget, scope)) {
+        return scope.filter(function (cell) {
+            return cell.isSame(cellTarget);
+        })[0];
+    }
+    var closestCell = LeUtilities.closestByDistance(cellTarget, scope);
     var oldActiveCell = BattleManagerTBS._activeCell;
     BattleManagerTBS._activeCell = closestCell; //- Support path scope
 
@@ -4022,19 +4885,19 @@ TBSAiManager.prototype.getClosestActionCellToTarget = function (target, obj, cen
     var aoeCenter = closestCell.toCoords();
     param = this.BM().makeObjAoEParam(obj, entity, aoeCenter);
     var aoe = this.BM().getScopeFromData(aoeData, aoeCenter, param);
-    var closestCellInAoE = LeUtilities.closestByDistance(target.getCell(), aoe);
+    var closestCellInAoE = LeUtilities.closestByDistance(cellTarget, aoe);
     BattleManagerTBS._activeCell = oldActiveCell;
     return closestCellInAoE;
 };
 
-TBSAiManager.prototype.getCellToMoveToForAction = function (entity, target, obj, center) {
+TBSAiManager.prototype.getCellToMoveToForAction = function (entity, targetCell, obj, center) {
     var movePoints = entity.getMovePoints();
     var moveParam = this.BM().makeMoveScopeParam(entity);
     var moveData = entity.getMoveScopeData();
     var scope = this.BM().getScopeFromData(moveData, center, moveParam, movePoints);
 
-    var closestCell = this.getClosestActionCellToTarget(target, obj, entity.getCell());
-    var exactDistance = LeUtilities.distanceBetweenCells(closestCell, target.getCell());
+    var closestCell = this.getClosestActionCellToTarget(targetCell, obj, entity.getCell());
+    var exactDistance = LeUtilities.distanceBetweenCells(closestCell, targetCell);
 
     scope = scope.filter(function (cell) {
         return cell._walkable && LeUtilities.distanceBetweenCells(cell, entity.getCell()) === exactDistance;
@@ -4056,10 +4919,10 @@ TBSAiManager.prototype.getCellToMoveToForAction = function (entity, target, obj,
         var currentCenter = cell.toCoords();
         var oldCell = entity.getCell();
         entity.setCell(cell);
-        //- This call set the los BTW
-        closestCell = this.getClosestActionCellToTarget(target, obj, currentCenter);
+        //- This call sets the los BTW
+        closestCell = this.getClosestActionCellToTarget(targetCell, obj, currentCenter);
         entity.setCell(oldCell);
-        if (closestCell.isSame(target.getCell()) && closestCell._scopeVisible) {
+        if (closestCell.isSame(targetCell) && closestCell._scopeVisible) {
             cellToMoveTo = cell;
             break;
         }
@@ -4067,8 +4930,60 @@ TBSAiManager.prototype.getCellToMoveToForAction = function (entity, target, obj,
     return cellToMoveTo;
 };
 
+TBSAiManager.prototype.getAoEPossibleMoves = function (entity, obj, center) {
+    var possibilities = [];
+    var scope = this.BM().makeMoveScope(entity, true).cells;
+    scope = scope.filter(function (cell) {
+        return cell._walkable;
+    }.bind(this));
+    var moveScope = [entity.getCell()].concat(scope);
+
+    while (moveScope.length > 0) {
+        var moveCell = moveScope.shift();
+        var currentCenter = moveCell.toCoords();
+        var oldCell = entity.getCell();
+        entity.setCell(moveCell);
+
+        var data = obj.id === entity._battler.attackSkillId() ? entity.getAttackScopeData() : entity.getObjectScopeData(obj);
+        var actionScope = this.BM().makeActionScope(entity, data, obj, true)
+            .cells
+            .filter(function (cell) {
+                return !(!cell._scopeVisible || (cell.isObstacleForLOS() && !cell.isThereEntity()));
+            });
+        while (actionScope.length > 0) {
+            var actionCell = actionScope.shift();
+            var aoeData = obj.id === entity._battler.attackSkillId() ? entity.getAttackAoEData() : entity.getObjectAoEData(obj);
+            var aoeCenter = actionCell.toCoords();
+            var param = this.BM().makeObjAoEParam(obj, entity, aoeCenter);
+            var aoe = this.BM().getScopeFromData(aoeData, aoeCenter, param);
+            var entities = this.BM().getEntitiesInScope(aoe).filter(function (ent) {
+                var b = ent.battler();
+                var e = ent;
+                return eval(obj.leTbs_aiConfig.use_condition);
+            });
+            var nbrAllies = entities.filter(function (ent) {
+                return this.isAlly(ent.battler());
+            }.bind(this)).length;
+            var nbrEnemies = entities.filter(function (ent) {
+                return this.isEnemy(ent.battler());
+            }.bind(this)).length;
+            if (nbrAllies > 0 || nbrEnemies > 0) {
+                possibilities.push({
+                    moveCell: moveCell,
+                    actionCell: actionCell,
+                    nbrAllies: nbrAllies,
+                    nbrEnemies: nbrEnemies,
+                    targets: entities
+                });
+            }
+        }
+        entity.setCell(oldCell);
+    }
+    return possibilities;
+};
+
 TBSAiManager.prototype.getBehavior = function () {
-    return Lecode.S_TBS.Config.AI["attack"];
+    return Lecode.S_TBS.Config.AI["default"];
 };
 
 TBSAiManager.prototype.currentCommand = function () {
@@ -4092,13 +5007,8 @@ TBSAiManager.prototype.areConditionsOkay = function () {
 };
 
 TBSAiManager.prototype.update = function () {
-    if (this._commandPhase === "making_offense_data") {
-        var _this = this;
-        setTimeout(function () {
-            _this.updateOffenseData();
-        });
+    if (this._isBuilding && this.updateActionConstruction())
         return;
-    }
     if (this._commandRunning) {
         this.updateRunningCommand();
         return;
@@ -4108,6 +5018,32 @@ TBSAiManager.prototype.update = function () {
         this.runCommand(command);
     } else
         this.forceEnd();
+};
+
+TBSAiManager.prototype.updateActionConstruction = function () {
+    if (this._constructionDelay < Lecode.S_TBS.aiProcessDelay) {
+        this._constructionDelay++;
+        return true;
+    }
+    this._constructionDelay = 0;
+    if (!this._builtData["offense"]) {
+        this.updateOffenseActionsBuilding();
+        return true;
+    } else if (!this._builtData["healing"]) {
+        this.updateHealingActionsBuilding();
+        return true;
+    } else if (!this._builtData["support"]) {
+        this.updateSupportActionsBuilding();
+        return true;
+    } else if (!this._builtData["move"]) {
+        this.updateMoveActionsBuilding();
+        return true;
+    } else if (!this._builtData["summon"]) {
+        this.updateSummonActionsBuilding();
+        return true;
+    }
+    this._isBuilding = false;
+    return false;
 };
 
 TBSAiManager.prototype.forceEnd = function () {
@@ -4121,6 +5057,10 @@ TBSAiManager.prototype.runCommand = function (command) {
         return;
     } else if (command === "endif") {
         this.commandEndIf();
+        this.nextCommand();
+        return;
+    } else if (command === "process_behaviors") {
+        this.processBehaviors();
         this.nextCommand();
         return;
     }
@@ -4157,16 +5097,22 @@ TBSAiManager.prototype.commandIf = function (condition) {
     var user = this._battler;
     var entity = this._entity;
     var canUseOffense = this.func_CanUseOffense.bind(this);
+    var canUseHealing = this.func_CanUseHealing.bind(this);
+    var canUseSupport = this.func_CanUseSupport.bind(this);
+    var canUseEscape = this.func_CanUseEscape.bind(this);
+    var canUseRush = this.func_CanUseRush.bind(this);
     var isTargetValid = this.func_IsTargetValid.bind(this);
     var chance = this.func_Chance.bind(this);
     var failureCode = this.func_FailureCode.bind(this);
     var battlerInRange = this.func_BattlerInRange.bind(this);
     var distanceBetween = this.func_DistanceBetween.bind(this);
+    var distanceToEnemies = this.func_DistanceToEnemies.bind(this);
+    var distanceToAllies = this.func_DistanceToAllies.bind(this);
     var isInMeleeWith = this.func_IsInMeleeWith.bind(this);
+    var isInMelee = this.func_IsInMelee.bind(this);
     var pattern = function (str) {
         return this.func_GetPattern() === str;
     }.bind(this);
-
     var result = eval(condition);
     this._ifArray.push(result);
 };
@@ -4177,6 +5123,44 @@ TBSAiManager.prototype.commandElse = function () {
 
 TBSAiManager.prototype.commandEndIf = function () {
     this._ifArray.pop();
+};
+
+TBSAiManager.prototype.processBehaviors = function () {
+    if (!this._battler.canMove()) {
+        return;
+    }
+
+    if (this._battler.isConfused()) {
+        if (this.func_CanUseOffense())
+            this.commandCallBehavior(["use_offense"]);
+        return;
+    }
+
+    var order = Lecode.S_TBS.Config.AI.BehaviorsOrder;
+    for (var i = 0; i < order.length; i++) {
+        var tag = order[i];
+        if (tag === "healing" && this.func_CanUseHealing()) {
+            this.commandCallBehavior(["use_healing"]);
+            break;
+        } else if (tag === "escape" && this.func_CanUseEscape()) {
+            this._entity._aiEscapeCount = Lecode.S_TBS.escapeCooldown + 1;
+            this.commandCallBehavior(["escape"]);
+            break;
+        } else if (tag === "summon" && this.func_CanUseSummon()) {
+            this._entity._aiSupportCount = Lecode.S_TBS.supportCooldown + 1;
+            this.commandCallBehavior(["use_summon"]);
+            break;
+        } else if (tag === "support" && this.func_CanUseSupport()) {
+            this.commandCallBehavior(["use_support"]);
+            break;
+        } else if (tag === "offense") {
+            if (this.func_CanUseOffense())
+                this.commandCallBehavior(["use_offense"]);
+            else
+                this.commandCallBehavior(["cant_use_offense"]);
+            break;
+        }
+    }
 };
 
 TBSAiManager.prototype.commandWait = function (param) {
@@ -4193,9 +5177,16 @@ TBSAiManager.prototype.commandCallBehavior = function (param) {
     }
 };
 
+TBSAiManager.prototype.commandSetActionData = function (param) {
+    var id = param[0].trim();
+    this._actionDataType = this._builtData[id];
+};
+
 TBSAiManager.prototype.commandSearchTarget = function (param) {
     var search = param[0];
     var maxPm = param[1];
+    var dataScope = param[2];
+    this.commandSetActionData([dataScope]);
 
     if (maxPm.match(/(.+)%/i))
         maxPm = Number(RegExp.$1) * 0.01 * this._entity.getMovePoints();
@@ -4210,14 +5201,28 @@ TBSAiManager.prototype.commandSearchTarget = function (param) {
             maxPm = this._entity.getMovePoints();
     }
 
-    var data;
-    if (search.match(/enemy/i))
-        data = this._offenseData;
+    var group = this.getGroupFromActionData(maxPm);
 
-    var group = this.getGroupFromActionData(data, maxPm);
-    if (!group || group.length === 0) {
-        this._targetData = null;
+    var focusedEntities = this.getFocusedEntities(group, dataScope);
+    if (focusedEntities.length > 0) {
+        var entity = focusedEntities[0];
+        this._targetData = {};
+        this._targetData.entity = entity;
         return;
+    }
+
+    if (search.match(/self/i)) {
+        group = group.filter(function (entity) {
+            return entity === this._entity;
+        });
+    } else if (search.match(/enemy/i)) {
+        group = group.filter(function (entity) {
+            return this.isEnemy(entity.battler());
+        }.bind(this));
+    } else if (search.match(/ally/i)) {
+        group = group.filter(function (entity) {
+            return this.isAlly(entity.battler());
+        }.bind(this));
     }
 
     if (search.match(/lowest/i)) {
@@ -4235,22 +5240,16 @@ TBSAiManager.prototype.commandSearchTarget = function (param) {
     }
 
     this._targetData = null;
-    //- Make sure the target is reachable (previously calculated, taken into account when making action data)
-    var entity = group[0];
-    //console.log("SELECTED TARGET = ", entity._battler.name());
-    for (var i = 0; i < data.length; i++) {
-        var action = data[i];
-        if (action.target === entity) {
-            this._targetData = {};
-            this._targetData.userCell = action.userCell;
-            this._targetData.entity = entity;
-            break;
-        }
-    }
+    if (!group || group.length === 0)
+        return;
+
+    //- Group is sorted so group[0] is the best match
+    this._targetData = {};
+    this._targetData.entity = group[0];
 };
 
 TBSAiManager.prototype.commandDrawMoveScope = function (param) {
-    this.BM().drawMoveScope(this._entity, this._entity.getMovePoints());
+    this.BM().drawMoveScope(this._entity);
 };
 
 TBSAiManager.prototype.commandMove = function (param) {
@@ -4262,7 +5261,7 @@ TBSAiManager.prototype.commandMove = function (param) {
     if (maxPm.match(/(.+)%/i))
         maxPm = Number(RegExp.$1) * 0.01 * this._entity.getMovePoints();
     else if (maxPm.match(/minimum/i))
-        maxPm = "minimum";
+        maxPm = this._actionData.requiredMp; //"minimum";
     else
         maxPm = Number(maxPm);
     if (LeUtilities.isNumeric(maxPm)) {
@@ -4273,48 +5272,69 @@ TBSAiManager.prototype.commandMove = function (param) {
             maxPm = this._entity.getMovePoints();
     }
 
-    this.commandDrawMoveScope();
-    var wait = Lecode.S_TBS.aiWaitTime;
-    this.BM().wait(wait);
+    if (Lecode.S_TBS.showScopes) {
+        this.commandDrawMoveScope();
+        var wait = Lecode.S_TBS.aiWaitTime;
+        this.BM().wait(wait);
+    } else {
+        this.BM().makeMoveScope(this._entity);
+    }
 
     this._commandPhase = "move_scope_wait";
     this._commandNextPhaseCallBack = this.commandMoveP2.bind(this, param, search, maxPm);
 };
 
 TBSAiManager.prototype.commandMoveP2 = function (param, search, maxPm) {
-    var target;
+    var cellTarget;
+    var focusedEntities;
     if (search.match(/toward_target/i))
-        target = this._targetData.entity;
+        cellTarget = this._targetData.cellTarget; //- TODO: WRONG
     else if (search.match(/enemies/i)) {
-        target = LeUtilities.closestByDistance(this._entity, this.getEnemiesOf(this._battler, true));
+        focusedEntities = this.getFocusedEntities(this.getEnemiesOf(this._battler, true), "offense");
+        if (search.match(/toward/i) && focusedEntities.length > 0)
+            cellTarget = focusedEntities[0].getCell();
+        else
+            cellTarget = LeUtilities.closestByDistance(this._entity, this.getEnemiesOf(this._battler, true)).getCell();
     } else if (search.match(/allies/i)) {
-        target = LeUtilities.closestByDistance(this._entity, this.getAlliesOf(this._battler, true));
+        focusedEntities = this.getFocusedEntities(this.getEnemiesOf(this._battler, true), "healing");
+        if (focusedEntities.length === 0)
+            focusedEntities = this.getFocusedEntities(this.getEnemiesOf(this._battler, true), "support");
+        if (search.match(/toward/i) && focusedEntities.length > 0)
+            cellTarget = focusedEntities[0].getCell();
+        else
+            cellTarget = LeUtilities.closestByDistance(this._entity, this.getAlliesOf(this._battler, true)).getCell();
     }
 
-    if (maxPm === "minimum") {
+    /*if (maxPm === "minimum") {
         maxPm = this._actionData.requiredMp;
-    }
+    }*/
 
     var scope = this.BM().moveScope().cells;
     scope = scope.filter(function (cell) {
         return cell._walkable && LeUtilities.distanceBetweenCells(cell, this._entity.getCell()) <= maxPm;
     }.bind(this));
 
-    var closestCell;
+    var destCell;
     if (search.match(/toward/i))
-        closestCell = LeUtilities.closestByDistance(target.getCell(), scope);
+        destCell = this.BM().closestWalkableCellTo(cellTarget, scope);
     else
-        closestCell = LeUtilities.farthestByDistance(target.getCell(), scope);
+        destCell = this.BM().farthestWalkableCellTo(cellTarget, scope);
 
-    this.BM().setCursorCell(closestCell);
-    var wait = Lecode.S_TBS.aiWaitTime;
-    this.BM().wait(wait);
+    this.BM().setCursorCell(destCell);
+    if (!this.BM().movePath() || this.BM().movePath().length === 0) {
+        this.nextCommand();
+        return;
+    }
+
+    if (Lecode.S_TBS.showScopes) {
+        var wait = Lecode.S_TBS.aiWaitTime;
+        this.BM().wait(wait);
+    }
 
     this._commandPhase = "move_selection_wait";
     this._commandNextPhaseCallBack = this.commandMoveP3.bind(this);
-    this._commandExtraData.destCell = closestCell;
+    this._commandExtraData.destCell = destCell;
     this._commandExtraData.savedParams = param.slice();
-    console.log("SLICE = this._commandExtraData.savedParams:", this._commandExtraData.savedParams);
 };
 
 TBSAiManager.prototype.commandMoveP3 = function () {
@@ -4324,11 +5344,17 @@ TBSAiManager.prototype.commandMoveP3 = function () {
 
 TBSAiManager.prototype.commandMoveForAction = function (param) {
     var cellToMoveTo = this._actionData.cellToMoveTo;
-    if (cellToMoveTo.isSame(this._entity.getCell()))
+    if (cellToMoveTo.isSame(this._entity.getCell())) {
         return;
-    this.commandDrawMoveScope();
-    var wait = Lecode.S_TBS.aiWaitTime;
-    this.BM().wait(wait);
+    }
+
+    if (Lecode.S_TBS.showScopes) {
+        this.commandDrawMoveScope();
+        var wait = Lecode.S_TBS.aiWaitTime;
+        this.BM().wait(wait);
+    } else {
+        this.BM().makeMoveScope(this._entity);
+    }
 
     this._commandPhase = "move_scope_wait";
     this._commandNextPhaseCallBack = this.commandMoveForActionP2.bind(this, param);
@@ -4338,8 +5364,10 @@ TBSAiManager.prototype.commandMoveForActionP2 = function (param) {
     var cellToMoveTo = this._actionData.cellToMoveTo;
 
     this.BM().setCursorCell(cellToMoveTo);
-    var wait = Lecode.S_TBS.aiWaitTime;
-    this.BM().wait(wait);
+    if (Lecode.S_TBS.showScopes) {
+        var wait = Lecode.S_TBS.aiWaitTime;
+        this.BM().wait(wait);
+    }
 
     this._commandPhase = "move_selection_wait";
     this._commandNextPhaseCallBack = this.commandMoveP3.bind(this);
@@ -4350,33 +5378,83 @@ TBSAiManager.prototype.commandMoveForActionP2 = function (param) {
 TBSAiManager.prototype.commandSetAction = function (param) {
     var type = param[0];
     var priority = param[1];
-
-    var searchedTarget = this._targetData.entity;
     var possibilities = [];
+    var data;
 
-    if (type.match(/damage/i)) {
-        var data = this._offenseData;
-        for (var i = 0; i < data.length; i++) {
-            var action = data[i];
-            if (action.target === searchedTarget) {
-                possibilities.push(action);
-            }
+    //- Special case for move type actions
+    if (type.match(/move/i)) {
+        data = this._builtData["move"];
+        var action, cellType;
+        if (priority.match(/toward/i)) {
+            action = data.sort(function (data1, data2) {
+                var value1 = data1.rushCellDistance;
+                var value2 = data2.rushCellDistance;
+                return (value1 < value2) ? 1 : ((value1 > value2) ? -1 : 0);
+            }.bind(this))[0];
+            cellType = action.rushCellTarget;
+        } else {
+            action = data.sort(function (data1, data2) {
+                var value1 = data1.escapeCellDistance;
+                var value2 = data2.escapeCellDistance;
+                return (value1 < value2) ? 1 : ((value1 > value2) ? -1 : 0);
+            }.bind(this))[0];
+            cellType = action.escapeCellTarget;
         }
-        possibilities = this.sortActionsByDmg(possibilities);
+        this._actionData = action;
+        this._actionData.cellTarget = cellType;
+        return;
     }
 
-    var action;
-    if (type.match(/average/i)) {
-        if (possibilities.length < 2) {
-            action = possibilities[0];
-        } else {
-            var array = [];
-            for (var i = 1; i < possibilities.length - 1; i++) {
-                array.push(possibilities[i]);
-            }
-            action = LeUtilities.getRandomValueInArray(array);
+    //- Special case for summon type actions
+    if (type.match(/summon/i)) {
+        data = this._builtData["summon"];
+        this._actionData = LeUtilities.getRandomValueInArray(data);
+        return;
+    }
+
+    var searchedEntity = this._targetData.entity;
+
+    if (type.match(/damage/i)) {
+        data = this._builtData["offense"];
+    } else if (type.match(/healing/i)) {
+        data = this._builtData["healing"];
+    } else if (type.match(/support/i)) {
+        data = this._builtData["support"];
+    }
+    for (var i = 0; i < data.length; i++) {
+        var action = data[i];
+        if (action.targets.indexOf(searchedEntity) >= 0) {
+            possibilities.push(action);
         }
-    } else if (type.match(/best/i)) {
+    }
+    possibilities = possibilities.sort(function (data1, data2) {
+        var value1 = data1.nbrTargets;
+        var value2 = data2.nbrTargets;
+        return (value1 < value2) ? 1 : ((value1 > value2) ? -1 : 0);
+    }.bind(this));
+    var bestNbrTargets = possibilities[0].nbrTargets;
+    //- Only keep possibilities with the best nbr of targets with 80% of chance
+    if (Math.random() < 0.8) {
+        possibilities = possibilities.filter(function (p) {
+            return p.nbrTargets === bestNbrTargets;
+        });
+    }
+    if (type.match(/healing/i))
+        possibilities = this.sortActionsByDmg(possibilities).reverse();
+    else if (type.match(/damage/i))
+        possibilities = this.sortActionsByDmg(possibilities);
+
+    var action = null;
+    if (priority.match(/average/i)) {
+        var array = [];
+        for (var i = 0; i < possibilities.length; i++) {
+            var p = possibilities[i];
+            var obj = p.obj;
+            for (var j = 0; j < (obj._leTbsRating || 1); j++)
+                array.push(p);
+        }
+        action = LeUtilities.getRandomValueInArray(array);
+    } else if (priority.match(/best/i)) {
         action = possibilities[0];
     } else {
         action = possibilities.leU_last();
@@ -4410,12 +5488,22 @@ TBSAiManager.prototype.commandUse = function (param) {
 
     if (obj) {
         this.BM().activeAction().setItemObject(obj);
-        if (this.BM().activeAction().isAttack())
-            this.BM().drawAttackScope(this._entity);
-        else
-            this.BM().drawSkillScope(this._entity, obj);
-        var wait = 40;
-        this.BM().wait(wait);
+        if (this.BM().activeAction().isAttack()) {
+            if (Lecode.S_TBS.showScopes)
+                this.BM().drawAttackScope(this._entity);
+            else
+                this.BM().makeAttackScope(this._entity);
+        } else {
+            if (Lecode.S_TBS.showScopes)
+                this.BM().drawSkillScope(this._entity, obj);
+            else
+                this.BM().makeSkillScope(this._entity, obj);
+        }
+
+        if (Lecode.S_TBS.showScopes) {
+            var wait = Lecode.S_TBS.aiWaitTime;
+            this.BM().wait(wait);
+        }
 
         this._commandPhase = "obj_scope_wait";
         this._commandNextPhaseCallBack = this.commandUseP2.bind(this, obj);
@@ -4423,15 +5511,17 @@ TBSAiManager.prototype.commandUse = function (param) {
 };
 
 TBSAiManager.prototype.commandUseP2 = function (obj) {
-    var enemy = this._targetData.entity;
+    var cellTarget = this._actionData.cellTarget;
     var center = this._entity.getCell().toCoords();
-    var cell = this.getClosestActionCellToTarget(enemy, obj, center);
+    var cell = this.getClosestActionCellToTarget(cellTarget, obj, center);
 
     this.BM().setCursorCell(cell);
-    this.BM().updateActionSelection();
+    //this.BM().updateActionSelection();
     this._entity.lookAt(cell);
-    var wait = Lecode.S_TBS.aiWaitTime;
-    this.BM().wait(wait);
+    if (Lecode.S_TBS.showScopes) {
+        var wait = Lecode.S_TBS.aiWaitTime;
+        this.BM().wait(wait);
+    }
 
     this._commandPhase = "obj_selection_wait";
     this._commandNextPhaseCallBack = this.commandUseP3.bind(this, obj);
@@ -4463,6 +5553,20 @@ TBSAiManager.prototype.commandScript = function (param) {
     eval(script);
 };
 
+TBSAiManager.prototype.getFocusedEntities = function (group, type) {
+    var focusData = [];
+    group.forEach(function (entity) {
+        var priority = entity.isFocusedByAI(type);
+        if (priority)
+            focusData.push({ entity: entity, priority: priority });
+    });
+    return focusData.sort(function (da, db) {
+        return db.priority - da.priority;
+    }).map(function (data) {
+        return data.entity;
+    });
+};
+
 TBSAiManager.prototype.updateRunningCommand = function () {
     var functionName = LeUtilities.shrinkTextWithUnderscores(this._commandRunning);
     var func = eval("this.updateCommand" + functionName);
@@ -4471,23 +5575,6 @@ TBSAiManager.prototype.updateRunningCommand = function () {
     } else {
         this.nextCommand();
     }
-    /*switch(this._commandRunning) {
-    	case "wait":
-    		this.updateCommandWait();
-    		break;
-    	case "move":
-    		this.updateCommandMove();
-    		break;
-    	case "move_for_action":
-    		this.updateCommandMoveForAction();
-    		break;
-    	case "use":
-    		this.updateCommandUse();
-    		break;
-    	default:
-    		this.nextCommand();
-    		break;
-    }*/
 };
 
 TBSAiManager.prototype.updateCommandWait = function () {
@@ -4510,7 +5597,6 @@ TBSAiManager.prototype.updateCommandMove = function () {
                 if (this._entity.getCell() === this._commandExtraData.destCell)
                     this.nextCommand();
                 else {
-                    console.log("this._commandExtraData.savedParams:", this._commandExtraData.savedParams);
                     this.commandMove(this._commandExtraData.savedParams);
                 }
             }
@@ -4535,8 +5621,9 @@ TBSAiManager.prototype.updateCommandMoveForAction = function () {
                 this.BM()._subPhase = "ai";
                 if (this._entity.getCell() === this._commandExtraData.destCell)
                     this.nextCommand();
-                else
+                else {
                     this.commandMoveForAction();
+                }
             }
             break;
         default:
@@ -4589,15 +5676,81 @@ TBSAiManager.prototype.func_CanUseOffense = function () {
         this._failureCode = "no_usable_skill";
         return false;
     }
-    if (this._offenseData.length <= 0) {
+    if (this._builtData["offense"].length <= 0) {
         this._failureCode = "out_of_range";
         return false;
     }
     return true;
 };
 
+TBSAiManager.prototype.func_CanUseHealing = function () {
+    if (this.getUsableSkills(this._battler).length === 0) {
+        this._failureCode = "no_usable_skill";
+        return false;
+    }
+    if (this._builtData["healing"].length <= 0) {
+        this._failureCode = "unable_to_heal";
+        return false;
+    }
+    return true;
+};
+
+TBSAiManager.prototype.func_CanUseSupport = function () {
+    if (this._entity._aiSupportCount === 0) return false;
+    if (this.getUsableSkills(this._battler).length === 0) {
+        this._failureCode = "no_usable_skill";
+        return false;
+    }
+    if (this._builtData["support"].length <= 0) {
+        this._failureCode = "unable_to_use_support";
+        return false;
+    }
+    return true;
+};
+
+TBSAiManager.prototype.func_CanUseSummon = function () {
+    if (this.getUsableSkills(this._battler).length === 0) {
+        this._failureCode = "no_usable_skill";
+        return false;
+    }
+    if (this._builtData["summon"].length <= 0) {
+        this._failureCode = "unable_to_use_summon";
+        return false;
+    }
+    return true;
+};
+
+TBSAiManager.prototype.func_CanUseEscape = function () {
+    if (this._entity._aiEscapeCount === 0) return false;
+    if (this.getUsableSkills(this._battler).length === 0) {
+        this._failureCode = "no_usable_skill";
+        return false;
+    }
+    if (this._builtData["move"].filter(function (action) {
+        return !!action.escapeCellTarget;
+    }).length <= 0) {
+        this._failureCode = "unable_to_escape_w_skill";
+        return false;
+    }
+    return true;
+};
+
+TBSAiManager.prototype.func_CanUseRush = function () {
+    if (this.getUsableSkills(this._battler).length === 0) {
+        this._failureCode = "no_usable_skill";
+        return false;
+    }
+    if (this._builtData["move"].filter(function (action) {
+        return !!action.rushCellTarget;
+    }).length <= 0) {
+        this._failureCode = "unable_to_rush_w_skill";
+        return false;
+    }
+    return true;
+};
+
 TBSAiManager.prototype.func_BattlerInRange = function (target, action) {
-    var entity, obj;
+    var cellTarget, obj;
     if (action.match(/defined_action/i)) {
         if (this._actionData)
             obj = this._actionData.obj;
@@ -4605,8 +5758,8 @@ TBSAiManager.prototype.func_BattlerInRange = function (target, action) {
             return false;
     }
     if (target.match(/defined_target/i)) {
-        if (this._targetData)
-            entity = this._targetData.entity;
+        if (this._actionData)
+            cellTarget = this._actionData.cellTarget;
         else
             return false;
     }
@@ -4617,7 +5770,7 @@ TBSAiManager.prototype.func_BattlerInRange = function (target, action) {
     var scope = this.BM().getScopeFromData(data, center, param);
     for (var i = 0; i < scope.length; i++) {
         var cell = scope[i];
-        if (entity.getCell().isSame(cell)) {
+        if (cellTarget.isSame(cell)) {
             return true;
         }
     }
@@ -4625,18 +5778,44 @@ TBSAiManager.prototype.func_BattlerInRange = function (target, action) {
 };
 
 TBSAiManager.prototype.func_DistanceBetween = function (target) {
-    var entity;
+    var cellTarget;
     if (target.match(/defined_target/i)) {
-        if (this._targetData)
-            entity = this._targetData.entity;
+        if (this._actionData)
+            cellTarget = this._actionData.cellTarget;
         else
             return false;
     }
-    return LeUtilities.distanceBetweenCells(entity.getCell(), this._entity.getCell());
+    return LeUtilities.distanceBetweenCells(cellTarget, this._entity.getCell());
+};
+
+TBSAiManager.prototype.func_DistanceToEnemies = function () {
+    var scope = this.BM().makeMoveScope(this._entity, true).cells;
+    scope = scope.filter(function (cell) {
+        return cell._walkable;
+    }.bind(this));
+    if (scope.length === 0)
+        scope = [this._entity.getCell()];
+    var cell = BattleManagerTBS.getCellTowardParty(scope, this.getEnemiesOf(this._battler, true));
+    return LeUtilities.distanceBetweenCells(cell, this._entity.getCell());
+};
+
+TBSAiManager.prototype.func_DistanceToAllies = function () {
+    var scope = this.BM().makeMoveScope(this._entity, true).cells;
+    scope = scope.filter(function (cell) {
+        return cell._walkable;
+    }.bind(this));
+    if (scope.length === 0)
+        scope = [this._entity.getCell()];
+    var cell = BattleManagerTBS.getCellTowardParty(scope, this.getAlliesOf(this._battler, true));
+    return LeUtilities.distanceBetweenCells(cell, this._entity.getCell());
 };
 
 TBSAiManager.prototype.func_IsInMeleeWith = function (target) {
     return this.func_DistanceBetween(target) <= 1;
+};
+
+TBSAiManager.prototype.func_IsInMelee = function () {
+    return this.func_DistanceToEnemies() <= 1;
 };
 
 TBSAiManager.prototype.func_GetPattern = function () {
@@ -4644,6 +5823,10 @@ TBSAiManager.prototype.func_GetPattern = function () {
 };
 
 TBSAiManager.prototype.getEnemiesOf = function (battler, needAlive) {
+    if (battler.hasConfusionStateAttackAlly())
+        return this.getAlliesOf(battler, needAlive);
+    if (battler.hasConfusionStateAttackAnyone() && Math.randomInt(2) === 0)
+        return this.getAlliesOf(battler, needAlive);
     var group = battler.isActor() ? this.BM().enemyEntities() : this.BM().allyEntities();
     if (needAlive) {
         return group.filter(function (ent) {
@@ -4654,7 +5837,11 @@ TBSAiManager.prototype.getEnemiesOf = function (battler, needAlive) {
     }
 };
 
-TBSAiManager.prototype.getAlliesOf = function (battler) {
+TBSAiManager.prototype.getAlliesOf = function (battler, needAlive) {
+    if (battler.hasConfusionStateAttackEnemy())
+        return this.getEnemiesOf(battler, needAlive);
+    if (battler.hasConfusionStateAttackAnyone() && Math.randomInt(2) === 0)
+        return this.getEnemiesOf(battler, needAlive);
     var group = battler.isEnemy() ? this.BM().enemyEntities() : this.BM().allyEntities();
     if (needAlive) {
         return group.filter(function (ent) {
@@ -4665,27 +5852,43 @@ TBSAiManager.prototype.getAlliesOf = function (battler) {
     }
 };
 
+TBSAiManager.prototype.isAlly = function (battler) {
+    return this._battler.isActor() && battler.isActor() || this._battler.isEnemy() && battler.isEnemy();
+};
+
+TBSAiManager.prototype.isEnemy = function (battler) {
+    return !this.isAlly(battler);
+};
+
 TBSAiManager.prototype.getUsableSkills = function (user) {
-    if (user.isActor())
-        return user.usableSkills();
+    if (user.isActor()) {
+        return user.usableSkills().concat($dataSkills[user.attackSkillId()]);
+    }
     var actionList = user.enemy().actions.filter(function (a) {
         return user.isActionValid(a);
     });
     var skills = [];
     for (var i = 0; i < actionList.length; i++) {
         var action = actionList[i];
-        skills.push($dataSkills[action.skillId]);
+        var skill = $dataSkills[action.skillId];
+        if (user.canUse(skill)) {
+            skill._leTbsRating = action.rating;
+            skills.push(skill);
+        }
     }
     return skills;
 };
 
-TBSAiManager.prototype.getGroupFromActionData = function (data, maxPm) {
+TBSAiManager.prototype.getGroupFromActionData = function (maxPm) {
     var group = [];
+    var data = this._actionDataType;
     for (var i = 0; i < data.length; i++) {
         if (data[i].requiredMp <= maxPm) {
-            var target = data[i].target;
-            if (!target._battler.isDead())
-                group.push(data[i].target);
+            for (var j = 0; j < data[i].targets.length; j++) {
+                var target = data[i].targets[j];
+                if (!target._battler.isDead())
+                    group.push(target);
+            }
         }
     }
     return group;
@@ -4711,6 +5914,7 @@ TBSSequenceManager.prototype.initialize = function () {
     this._savedCells = {};
     this._sequenceQueue = [];
     this._obj = null;
+    this._affectedTargets = [];
 };
 
 TBSSequenceManager.prototype.start = function (sequence, user, action) {
@@ -4719,12 +5923,14 @@ TBSSequenceManager.prototype.start = function (sequence, user, action) {
     this._commandRunning = null;
     this._sequenceQueue = [];
     this._users = [user];
+    this._affectedTargets = [];
     if (action)
         this._obj = action.item();
+    this._action = action;
 };
 
-TBSSequenceManager.prototype.append = function (sequence, user) {
-    this._sequenceQueue.push([sequence, user]);
+TBSSequenceManager.prototype.append = function (sequence, user, action) {
+    this._sequenceQueue.push([sequence, user, action]);
 };
 
 TBSSequenceManager.prototype.getUser = function () {
@@ -4735,10 +5941,22 @@ TBSSequenceManager.prototype.getObj = function () {
     return this._obj;
 };
 
-TBSSequenceManager.prototype.parseSequence = function (sequence) {
-    if (sequence instanceof Array) return sequence;
-    sequence = sequence.replace("\n", "");
-    return LeUtilities.stringSplit(sequence, ";");
+TBSSequenceManager.prototype.parseSequence = function (id) {
+    if (id instanceof Array) return id;
+    if (id.match(/\((.+)\)/i)) {
+        var args = RegExp.$1.split(",");
+        id = id.replace(/\(.+\)/i, "");
+        var sequence = Lecode.S_TBS.Config.Sequences[id];
+        for (var i = 0; i < sequence.length; i++) {
+            var line = sequence[i];
+            for (var j = 0; j < args.length; j++) {
+                var arg = args[j];
+                sequence[i] = line.replace("$" + String(j + 1), arg);
+            }
+        }
+        return sequence;
+    }
+    return Lecode.S_TBS.Config.Sequences[id];
 };
 
 TBSSequenceManager.prototype.update = function () {
@@ -4892,7 +6110,8 @@ TBSSequenceManager.prototype.commandEffects = function (param) {
         else
             hitAnim = BattleManagerTBS.activeAction().item().animationId;
     }
-    BattleManagerTBS.applyObjEffects(this.getUser(), obj, targets, hitAnim, animDelay);
+    BattleManagerTBS.invokeObjEffects(this.getUser(), obj, targets, hitAnim, animDelay);
+    this._affectedTargets = this._affectedTargets.concat(targets);
 
     this._waitRequested = wait;
 };
@@ -4913,7 +6132,7 @@ TBSSequenceManager.prototype.commandMapEffects = function (param) {
         else
             hitAnim = BattleManagerTBS.activeAction().item().animationId;
     }
-    BattleManagerTBS.applyObjEffectsOnMap(this.getUser(), obj, cellTargets, hitAnim, animDelay);
+    BattleManagerTBS.invokeObjEffectsOnMap(this.getUser(), obj, cellTargets, hitAnim, animDelay);
 
     this._waitRequested = wait;
 };
@@ -4949,7 +6168,7 @@ TBSSequenceManager.prototype.commandAnim = function (param) {
     targets.forEach(function (target) {
         if (collapse_anim)
             anim = target.getCollapseAnimation();
-        BattleManagerTBS.getLayer("animations").newAnimation(anim, false, animDelay, target.getCell(), target._sprite);
+        target.newAnimation(anim, false, animDelay);
     }.bind(this));
 
     this._waitRequested = wait;
@@ -5062,6 +6281,16 @@ TBSSequenceManager.prototype.commandMoveToCell = function (param) {
     }
 };
 
+TBSSequenceManager.prototype.commandSwitchCells = function (param) {
+    var targetData1 = param[0];
+    var targetData2 = param[1];
+    var target1 = this.readTargets(targetData1)[0];
+    var target2 = this.readTargets(targetData2)[0];
+
+    if (target1 && target2)
+        target1.switchCellWith(target2);
+};
+
 TBSSequenceManager.prototype.commandJumpToCell = function (param) {
     var targetData = param[0];
     var cellTargetData = param[1];
@@ -5144,19 +6373,23 @@ TBSSequenceManager.prototype.commandProjectile = function (param) {
     var cellTargets2 = this.readCellTargets(cellTargetData2);
     if (cellTargets2.length === 0) {
         var entities = this.readTargets(cellTargetData2);
-        cellTargets2 = [entities[0].getCell()];
+        cellTargets2 = entities.map(function (entity) {
+            return entity.getCell();
+        });
     }
+    cellTargets2 = LeUtilities.uniqArray(cellTargets2);
 
     if (cellTargets1.length > 0 && cellTargets2.length > 0) {
         var cellStart = cellTargets1[0];
-        var cellEnd = cellTargets2[0];
-        var w = $gameMap.tileWidth();
-        var h = $gameMap.tileHeight();
-        var sx = cellStart.x * w + w / 2;
-        var sy = cellStart.y * h + h / 2;
-        var dx = cellEnd.x * w + w / 2;
-        var dy = cellEnd.y * h + h / 2;
-        BattleManagerTBS._projectilesManager.newProjectile(id, [sx, sy], [dx, dy]);
+        cellTargets2.forEach(function (cellEnd) {
+            var w = $gameMap.tileWidth();
+            var h = $gameMap.tileHeight();
+            var sx = cellStart.x * w + w / 2;
+            var sy = cellStart.y * h + h / 2;
+            var dx = cellEnd.x * w + w / 2;
+            var dy = cellEnd.y * h + h / 2;
+            BattleManagerTBS._projectilesManager.newProjectile(id, [sx, sy], [dx, dy]);
+        });
     }
 };
 
@@ -5195,6 +6428,13 @@ TBSSequenceManager.prototype.commandSaveCells = function (param) {
     } else {
         this._savedCells[id] = targets;
     }
+};
+
+TBSSequenceManager.prototype.commandSetCursor = function (param) {
+    var targetData = param[0];
+    var targets = this.readCellTargets(targetData);
+    var cell = targets[0];
+    BattleManagerTBS.setCursorCell(cell);
 };
 
 TBSSequenceManager.prototype.commandCall = function (param) {
@@ -5253,8 +6493,7 @@ TBSSequenceManager.prototype.commandCallForEveryEntity = function (param) {
     var targetData = param[1];
     var sortType = param[2] || "random";
 
-    var aoe = this.readCellTargets(targetData);
-    var entities = BattleManagerTBS.getEntitiesInScope(aoe);
+    var entities = this.readTargets(targetData);
     if (sortType === "close->far") {
         entities = entities.sort(function (a, b) {
             var obj_aDist = LeUtilities.distanceBetween(a.getCell(), this.getUser().getCell());
@@ -5309,6 +6548,16 @@ TBSSequenceManager.prototype.commandAskCall = function (param) {
 
     for (var i = 0; i < targets.length; i++) {
         targets[i].startSequence(seq);
+    }
+};
+
+TBSSequenceManager.prototype.commandUseSkill = function (param) {
+    var targetData = param[0];
+    var skillId = param[1];
+    var targets = this.readTargets(targetData);
+
+    for (var i = 0; i < targets.length; i++) {
+        targets[i].forceAction(skillId);
     }
 };
 
@@ -5424,23 +6673,86 @@ TBSSequenceManager.prototype.updateCommandProjectile = function () {
 
 TBSSequenceManager.prototype.readTargets = function (data) {
     var targets = [];
-    if (data.match(/aoe_all_(.+)/i)) {
-        var info = String(RegExp.$1);
-        BattleManagerTBS._actionAoE.forEach(function (cell) {
-            var target = cell.getEntity();
-            if (target != null) {
-                if (info.match(/battlers/i) || info.match(/allies/i) && target.battler().isActor() || info.match(/enemies/i) && !target.battler().isActor())
-                    targets.push(target);
-            }
-        }.bind(this));
-    } else if (data.match(/(\d+)_random_battlers_in_aoe/i)) {
-        var battlersInAoe = [];
-        BattleManagerTBS._actionAoE.forEach(function (cell) {
-            var entity = cell.getEntity();
-            if (entity)
-                battlersInAoe.push(entity);
-        }.bind(this));
-        targets = LeUtilities.getXRandomValuesInArray(battlersInAoe, Number(RegExp.$1));
+    var x = BattleManagerTBS.cursor().cellX;
+    var y = BattleManagerTBS.cursor().cellY;
+    var cursorCell = BattleManagerTBS.getCellAt(x, y);
+    var aoe = [];
+    if (data.match(/\{(.+)\}/i)) {
+        var aoeKey = RegExp.$1;
+        if (aoeKey === "aoe") {
+            aoe = BattleManagerTBS._actionAoE;
+        } else if (aoeKey === "cursor") {
+            aoe = [cursorCell];
+        } else {
+            var param = {
+                user: this.getUser(),
+                dir: this.getUser().getDirectionTo(cursorCell),
+                need_check_los: false,
+                exclude_center: false,
+                line_of_sight: false
+            };
+            aoe = BattleManagerTBS.getScopeFromData(aoeKey, cursorCell, param);
+        }
+    }
+    var aoeTargets = BattleManagerTBS.getEntitiesInScope(aoe);
+    var aoeAllyTargets = aoeTargets.filter(function (entity) {
+        return this.isAlly(entity.battler());
+    }.bind(this));
+    var aoeEnemyTargets = aoeTargets.filter(function (entity) {
+        return this.isEnemy(entity.battler());
+    }.bind(this));
+    var aoeDeadTargets = aoeTargets.filter(function (entity) {
+        return entity.battler().isDead();
+    });
+    var aoeDeadAllyTargets = aoeAllyTargets.filter(function (entity) {
+        return entity.battler().isDead();
+    });
+    var aoeDeadEnemyTargets = aoeEnemyTargets.filter(function (entity) {
+        return entity.battler().isDead();
+    });
+    var cursorTarget = [cursorCell.getEntity()];
+    var cursorAllyTarget = (cursorTarget[0] && this.isAlly(cursorTarget[0].battler())) ? cursorTarget : [];
+    var cursorEnemyTarget = (cursorTarget[0] && this.isEnemy(cursorTarget[0].battler())) ? cursorTarget : [];
+    var cursorDeadTarget = (cursorTarget[0] && cursorTarget[0].battler().isDead()) ? cursorTarget : [];
+    var cursorDeadAllyTarget = (cursorAllyTarget[0] > 0 && cursorAllyTarget[0].battler().isDead()) ? cursorAllyTarget : [];
+    var cursorDeadEnemyTarget = (cursorEnemyTarget[0] > 0 && cursorEnemyTarget[0].battler().isDead()) ? cursorEnemyTarget : [];
+
+    if (data.match(/\{.+\}_battlers/i)) {
+        targets = aoeTargets;
+    } else if (data.match(/\{.+\}_allies/i)) {
+        targets = aoeAllyTargets;
+    } else if (data.match(/\{.+\}_enemies/i)) {
+        targets = aoeEnemyTargets;
+    } else if (data.match(/(\d+)_battlers_in_\{.+\}/i)) {
+        targets = LeUtilities.getXRandomValuesInArray(aoeTargets, Number(RegExp.$1));
+    } else if (data.match(/(\d+)_allies_in_\{.+\}/i)) {
+        targets = LeUtilities.getXRandomValuesInArray(aoeAllyTargets, Number(RegExp.$1));
+    } else if (data.match(/(\d+)_enemies_in_\{.+\}/i)) {
+        targets = LeUtilities.getXRandomValuesInArray(aoeEnemyTargets, Number(RegExp.$1));
+    } else if (data.match(/cursor_battler/i)) {
+        targets = cursorTarget;
+    } else if (data.match(/cursor_ally/i)) {
+        targets = cursorAllyTarget;
+    } else if (data.match(/cursor_enemy/i)) {
+        targets = cursorEnemyTarget;
+    } else if (data.match(/\{.+\}_dead_battlers/i)) {
+        targets = aoeDeadTargets;
+    } else if (data.match(/\{.+\}_dead_allies/i)) {
+        targets = aoeDeadAllyTargets;
+    } else if (data.match(/\{.+\}_dead_enemies/i)) {
+        targets = aoeDeadEnemyTargets;
+    } else if (data.match(/(\d+)_dead_battlers_in_\{.+\}/i)) {
+        targets = LeUtilities.getXRandomValuesInArray(aoeDeadTargets, Number(RegExp.$1));
+    } else if (data.match(/(\d+)_dead_allies_in_\{.+\}/i)) {
+        targets = LeUtilities.getXRandomValuesInArray(aoeDeadAllyTargets, Number(RegExp.$1));
+    } else if (data.match(/(\d+)_dead_enemies_in_\{.+\}/i)) {
+        targets = LeUtilities.getXRandomValuesInArray(aoeDeadEnemyTargets, Number(RegExp.$1));
+    } else if (data.match(/cursor_dead_battler/i)) {
+        targets = cursorDeadTarget;
+    } else if (data.match(/cursor_dead_ally/i)) {
+        targets = cursorDeadAllyTarget;
+    } else if (data.match(/cursor_dead_enemy/i)) {
+        targets = cursorDeadEnemyTarget;
     } else if (data.match(/battler_toward_user/i)) {
         var cell = this.getUser().getForwardCell();
         if (cell) {
@@ -5450,61 +6762,126 @@ TBSSequenceManager.prototype.readTargets = function (data) {
         }
     } else if (data.match(/user/i)) {
         targets = [this.getUser()];
-    } else if (data.match(/last_battler_targets/i)) {
+    } else if (data.match(/all/i)) {
+        BattleManagerTBS.allEntities().forEach(function (entity) {
+            targets.push(entity);
+        });
+    } else if (data.match(/allies/i)) {
+        BattleManagerTBS.allEntities().forEach(function (entity) {
+            if (this.isAlly(entity.battler()))
+                targets.push(entity);
+        }.bind(this));
+    } else if (data.match(/enemies/i)) {
+        BattleManagerTBS.allEntities().forEach(function (entity) {
+            if (this.isEnemy(entity.battler()))
+                targets.push(entity);
+        }.bind(this));
+    } else if (data.match(/last_targets/i)) {
         targets = this._lastBattlerTargets;
     } else if (data.match(/saved\((.+)\)/i)) {
         targets = this._savedEntities[RegExp.$1] || [];
-    } else if (data.match(/(.+)_at_distance_(.+)_from_(.+)/i)) {
-        var info = String(RegExp.$1);
-        var maxDist = Number(RegExp.$2);
-        var cell = this.readCellTargets(String(RegExp.$3))[0];
-        BattleManagerTBS.allEntities().forEach(function (entity) {
-            if (info.match(/battlers/i) || info.match(/allies/i) && entity.battler().isActor() || info.match(/enemies/i) && !entity.battler().isActor()) {
-                var distance = LeUtilities.distanceBetweenCells(cell, entity.getCell());
-                if (distance <= maxDist)
-                    targets.push(entity);
-            }
+    }
+
+    if (data.match(/\-(.+)/i)) {
+        var newData = RegExp.$1;
+        var toExclude = this.readTargets(newData);
+        targets = targets.filter(function (entity) {
+            return toExclude.indexOf(entity) === -1;
         });
     }
 
-    if (data.match(/-user/i)) {
+    /*if (data.match(/-user/i)) {
         var ux = this.getUser()._cellX;
         var uy = this.getUser()._cellY;
         targets = targets.filter(function (entity) {
             return entity._cellX != ux || entity._cellY != uy;
         }.bind(this));
-    }
+    }*/
     this._lastBattlerTargets = targets;
     return targets;
 };
 
 TBSSequenceManager.prototype.readCellTargets = function (data) {
     var targets = [];
-    if (data.match(/(\d+)_random_cells_in_aoe/i)) {
-        var cells = BattleManagerTBS._actionAoE;
-        var randomCells = LeUtilities.getXRandomValuesInArray(cells, Number(RegExp.$1));
-        targets = randomCells;
-    } else if (data.match(/last_cell_targets/i)) {
+    var x = BattleManagerTBS.cursor().cellX;
+    var y = BattleManagerTBS.cursor().cellY;
+    var cursorCell = BattleManagerTBS.getCellAt(x, y);
+    var aoe = [];
+    if (data.match(/\{(.+)\}/i)) {
+        var aoeKey = RegExp.$1;
+        if (aoeKey === "aoe") {
+            aoe = BattleManagerTBS._actionAoE;
+        } else if (aoeKey === "cursor") {
+            aoe = [cursorCell];
+        } else {
+            var param = {
+                user: this.getUser(),
+                dir: this.getUser().getDirectionTo(cursorCell),
+                need_check_los: false,
+                exclude_center: false,
+                line_of_sight: false
+            };
+            aoe = BattleManagerTBS.getScopeFromData(aoeKey, cursorCell, param);
+        }
+    }
+
+    if (data.match(/\{(.+)\}/i)) {
+        targets = aoe;
+    } else if (data.match(/cursor_cell/i)) {
+        targets = [cursorCell];
+    } else if (data.match(/user_cell/i)) {
+        targets = [this.getUser().getCell()];
+    } else if (data.match(/(\d+)_cells_in_\{.+\}/i)) {
+        targets = LeUtilities.getXRandomValuesInArray(aoe, Number(RegExp.$1));
+    } else if (data.match(/\{.+\}_ally_cells/i)) {
+        targets = aoe.filter(function (cell) {
+            var e = cell.getEntity();
+            if (e) {
+                return this.isAlly(e.battler());
+            }
+            return false;
+        }.bind(this));
+    } else if (data.match(/\{.+\}_enemy_cells/i)) {
+        targets = aoe.filter(function (cell) {
+            var e = cell.getEntity();
+            if (e) {
+                return this.isEnemy(e.battler());
+            }
+            return false;
+        }.bind(this));
+    } else if (data.match(/battlers_cells/i)) {
+        BattleManagerTBS.allEntities().forEach(function (entity) {
+            targets.push(entity.getCell());
+        }.bind(this));
+    } else if (data.match(/ally_cells/i)) {
+        BattleManagerTBS.allEntities().forEach(function (entity) {
+            if (this.isAlly(entity.battler()))
+                targets.push(entity.getCell());
+        }.bind(this));
+    } else if (data.match(/enemy_cells/i)) {
+        BattleManagerTBS.allEntities().forEach(function (entity) {
+            if (this.isEnemy(entity.battler()))
+                targets.push(entity.getCell());
+        }.bind(this));
+    } else if (data.match(/last_targets/i)) {
         targets = this._lastCellTargets;
     } else if (data.match(/saved\((.+)\)/i)) {
         targets = this._savedCells[RegExp.$1] || [];
-    } else if (data.match(/aoe/i)) {
-        targets = BattleManagerTBS._actionAoE;
-    } else if (data.match(/cursor_cell/i)) {
-        var x = BattleManagerTBS.cursor().cellX;
-        var y = BattleManagerTBS.cursor().cellY;
-        targets = [BattleManagerTBS.getCellAt(x, y)];
-    } else if (data.match(/user_cell/i)) {
-        var x = this.getUser()._cellX;
-        var y = this.getUser()._cellY;
-        targets = [BattleManagerTBS.getCellAt(x, y)];
     }
 
+    if (data.match(/\-(.+)/i)) {
+        var newData = RegExp.$1;
+        var toExclude = this.readCellTargets(newData);
+        targets = targets.filter(function (cell) {
+            return toExclude.indexOf(cell) === -1;
+        });
+    }
+    /*
     if (data.match(/-user_cell/i)) {
         targets = targets.filter(function (cell) {
             return !this.getUser().getCell().isSame(cell);
         }.bind(this));
-    }
+    }*/
     this._lastCellTargets = targets;
     return targets;
 };
@@ -5521,13 +6898,25 @@ TBSSequenceManager.prototype.endOfSequence = function () {
     this._savedCells = {};
     var data = this._sequenceQueue.shift();
     if (data) {
-        this.start(data[0], data[1]);
+        this.start(data[0], data[1], data[2]);
         this.update();
+    } else {
+        var entities = LeUtilities.uniqArray(this._affectedTargets);
+        BattleManagerTBS.processCounterAttack(entities, this.getUser(), this._action);
+        this._affectedTargets = [];
     }
 };
 
 TBSSequenceManager.prototype.isRunning = function () {
     return this._sequence != null;
+};
+
+TBSSequenceManager.prototype.isAlly = function (battler) {
+    return this.getUser().battler().isActor() && battler.isActor() || this.getUser().battler().isEnemy() && battler.isEnemy();
+};
+
+TBSSequenceManager.prototype.isEnemy = function (battler) {
+    return !this.isAlly(battler);
 };
 
 /*-------------------------------------------------------------------------
@@ -5744,7 +7133,7 @@ function TBSCell(x, y) {
 }
 
 TBSCell.prototype.isSame = function (otherCell) {
-    return this.x === otherCell.x && this.y === otherCell.y;
+    return otherCell && this.x === otherCell.x && this.y === otherCell.y;
 };
 
 TBSCell.prototype.select = function () {
@@ -5828,6 +7217,14 @@ SpriteCursorTBS.prototype.initialize = function (bitmap) {
     };
 };
 
+SpriteCursorTBS.prototype.hide = function () {
+    this.visible = false;
+};
+
+SpriteCursorTBS.prototype.show = function () {
+    this.visible = true;
+};
+
 /*-------------------------------------------------------------------------
 * TBSTurnOrderVisual
 -------------------------------------------------------------------------*/
@@ -5878,7 +7275,9 @@ TBSEntity.prototype.initialize = function (battler, layer) {
     this._actionPerformed = false;
     this._dead = false;
     this._flag = null;
+    this._isMouseOver = false;
     this.createSprite(battler, layer);
+    this.createSpriteValues();
     this.createComponents();
     this.setMovePoints();
     this.initializeSpeed();
@@ -5886,6 +7285,11 @@ TBSEntity.prototype.initialize = function (battler, layer) {
 
 TBSEntity.prototype.createSprite = function (battler, layer) {
     this._sprite = new TBSEntity_Sprite(battler, this);
+    this._layer = layer;
+    layer.addChild(this._sprite);
+};
+
+TBSEntity.prototype.createSpriteValues = function () {
     this._posX = 0;
     this._posY = 0;
     this._dir = 2;
@@ -5894,7 +7298,6 @@ TBSEntity.prototype.createSprite = function (battler, layer) {
     this._afterPose = "idle";
     this._poseLoop = false;
     this._fixedPose = null;
-    layer.addChild(this._sprite);
 };
 
 TBSEntity.prototype.createComponents = function () {
@@ -5913,9 +7316,12 @@ TBSEntity.prototype.changeSpeed = function (speed) {
     this._speed += speed;
 };
 
+TBSEntity.prototype.destroy = function () {
+    //this._layer.removeChild(this._sprite);
+};
+
 TBSEntity.prototype.startSequence = function (id, action) {
-    var sequence = Lecode.S_TBS.Config.Sequences[id];
-    this._sequenceManager.start(sequence, this, action);
+    this._sequenceManager.start(id, this, action);
 };
 
 TBSEntity.prototype.runningSequence = function () {
@@ -5930,12 +7336,12 @@ TBSEntity.prototype.callSequence = function (id) {
     }
 };
 
-TBSEntity.prototype.appendSequence = function (id) {
+TBSEntity.prototype.appendSequence = function (id, action) {
     if (this._sequenceManager.isRunning()) {
         var sequence = Lecode.S_TBS.Config.Sequences[id];
-        this._sequenceManager.append(sequence, this);
+        this._sequenceManager.append(sequence, this, action);
     } else {
-        this.startSequence(id);
+        this.startSequence(id, action);
     }
 };
 
@@ -6021,6 +7427,7 @@ TBSEntity.prototype.shiftPosition = function (x, y) {
 TBSEntity.prototype.update = function () {
     this.checkDeath();
     this.updateMove();
+    this.checkMouseEvents();
 };
 
 TBSEntity.prototype.updateSprite = function () {
@@ -6041,10 +7448,12 @@ TBSEntity.prototype.onBattleStart = function () {
 };
 
 TBSEntity.prototype.onTurnStart = function () {
-    if (this._battler.onTurnStart) //- Compatibility for YEA
-        this._battler.onTurnStart();
     this.setMovePoints();
     this.callSequence("turn_start");
+    /*if (this.battler().isActor())
+        this.newAnimation(180,false,false);
+    else
+        this.newAnimation(181,false,false);*/
 };
 
 TBSEntity.prototype.onTurnEnd = function () {
@@ -6068,6 +7477,51 @@ TBSEntity.prototype.onRevive = function () {
     this._dead = false;
     this.appendSequence("revived");
     BattleManagerTBS.onEntityRevive(this);
+};
+
+TBSEntity.prototype.onDamage = function () {
+    this.addPopup();
+    this.checkDeath();
+};
+
+TBSEntity.prototype.onActionStart = function (id, fastSequence, action) {
+};
+
+TBSEntity.prototype.onActionEnd = function (id, action) {
+};
+
+TBSEntity.prototype.checkMouseEvents = function () {
+    var triggered = false;
+    if (this.isMouseOverMe()) {
+        if (!this._isMouseOver) {
+            this._isMouseOver = true;
+            this.onMouseOver();
+        }
+        this.whileMouseOver();
+    }
+    if (!this.isMouseOverMe()) {
+        if (this._isMouseOver) {
+            this.onMouseOut();
+        }
+        this._isMouseOver = false;
+    }
+};
+
+TBSEntity.prototype.isMouseOverMe = function () {
+    var data = TouchInput._leTBSMoveData;
+    return this._sprite.getBounds().contains(data.x, data.y);
+};
+
+TBSEntity.prototype.onMouseOver = function () {
+
+};
+
+TBSEntity.prototype.onMouseOut = function () {
+
+};
+
+TBSEntity.prototype.whileMouseOver = function () {
+
 };
 
 TBSEntity.prototype.lookAt = function (cell) {
@@ -6141,7 +7595,7 @@ TBSEntity.prototype.lookClosestBattler = function (entities) {
 };
 
 TBSEntity.prototype.processMovement = function (path) {
-    if (path.length === 0) return;
+    if (!path || path.length === 0) return;
     this._moving = true;
     this._movePath = path;
     this._movePath.reverse();
@@ -6199,8 +7653,6 @@ TBSEntity.prototype.forcePush = function (user, sourceCell, distance, obj, damag
     distance += user.getKnockbackBonus() - this.getKnockbackReduction();
     var old = this.getDir();
     this.lookAway(sourceCell);
-    console.log("distance:", distance);
-    console.log("damage:", damage);
     this.forceMoveStraight(distance, damage);
     this.setDir(old);
     this._moveUpdateDir = false;
@@ -6300,7 +7752,7 @@ TBSEntity.prototype.getSideCells = function () {
     return [sideCell1, sideCell2];
 };
 
-
+//- TODO: MOVE the 3 following functions to BattleManagerTBS
 TBSEntity.prototype.forceAction = function (skillId, target) {
     var skill = $dataSkills[skillId];
     this.forceActionSetTarget(target);
@@ -6324,15 +7776,16 @@ TBSEntity.prototype.executeAction = function (obj) {
     action.setItemObject(obj);
 
     var data = obj.id === battler.attackSkillId() ? this.getAttackScopeData() : this.getObjectScopeData(obj);
-    var param = BattleManagerTBS.makeObjScopeParam(obj, this, center);
+    /*var param = BattleManagerTBS.makeObjScopeParam(obj, this, center);
     var scope = BattleManagerTBS.getScopeFromData(data, center, param);
     BattleManagerTBS._actionScope = {};
     BattleManagerTBS._actionScope.cells = scope;
-    BattleManagerTBS._actionScope.center = center;
+    BattleManagerTBS._actionScope.center = center;*/
+    BattleManagerTBS.makeActionScope(this, data, obj);
 
     var aoeData = obj.id === battler.attackSkillId() ? this.getAttackAoEData() : this.getObjectAoEData(obj);
     var aoeCenter = BattleManagerTBS._activeCell.toCoords();
-    param = BattleManagerTBS.makeObjAoEParam(obj, this, aoeCenter);
+    var param = BattleManagerTBS.makeObjAoEParam(obj, this, aoeCenter);
     var aoe = BattleManagerTBS.getScopeFromData(aoeData, aoeCenter, param);
     BattleManagerTBS._actionAoE = aoe;
 
@@ -6418,6 +7871,12 @@ TBSEntity.prototype.teleport = function (cell) {
     this.setCell(cell);
 };
 
+TBSEntity.prototype.switchCellWith = function (entity) {
+    var old = this.getCell();
+    this.teleport(entity.getCell());
+    entity.teleport(old);
+};
+
 TBSEntity.prototype.followTrajectory = function (trajectory, cell) {
     if (cell.x < this.getCell().x) {
         trajectory = trajectory.reverse();
@@ -6442,9 +7901,15 @@ TBSEntity.prototype.setMovePoints = function () {
         this._movePoints = 0;
 };
 
-TBSEntity.prototype.changeMovePoints = function (plus) {
-    this._movePoints += plus;
-};
+TBSEntity.prototype.applyObjChangeMovePoints = function (obj) {
+    var value = obj.leTbs_changeMovePoints;
+    var nbr = value.match("%") ? Number(value.replace("%", "")) * 0.01 * this.getMovePoints() : Number(value);
+    this.changeMovePoints(nbr);
+},
+
+    TBSEntity.prototype.changeMovePoints = function (plus) {
+        this._movePoints += plus;
+    };
 
 TBSEntity.prototype.getMovePoints = function () {
     return this._movePoints.clamp(0, this._movePoints);
@@ -6475,6 +7940,10 @@ TBSEntity.prototype.canItemCommand = function () {
 TBSEntity.prototype.canObjCommand = function () {
     if (this.oneTimeOffense() && this._actionPerformed) return false;
     return true;
+};
+
+TBSEntity.prototype.playableByAI = function () {
+    return this.battler().isEnemy() || this.battler().isConfused();
 };
 
 TBSEntity.prototype.getAttackAnimation = function () {
@@ -6574,9 +8043,26 @@ TBSEntity.prototype.getWeaponSequenceData = function () {
     }
 };
 
+TBSEntity.prototype.getWeaponFastSequence = function () {
+    if (this._battler.isEnemy())
+        return [];
+    else {
+        for (var i = 0; i < this._battler.weapons().length; i++) {
+            var weapon = this._battler.weapons()[i];
+            if (weapon && weapon.leTbs_sequence)
+                return weapon.leTbs_sequence;
+        }
+        return [];
+    }
+};
+
 TBSEntity.prototype.getObjectSequenceData = function (obj) {
     var defaultSeqId = DataManager.isSkill(obj) ? Lecode.S_TBS.defaultSkillSequence : Lecode.S_TBS.defaultItemSequence;
     return obj.leTbs_sequenceData || defaultSeqId;
+};
+
+TBSEntity.prototype.getObjectFastSequence = function (obj) {
+    return obj.leTbs_sequence;
 };
 
 TBSEntity.prototype.passAfterObjUse = function (obj) {
@@ -6592,11 +8078,11 @@ TBSEntity.prototype.passAfterObjUse = function (obj) {
 };
 
 TBSEntity.prototype.oneTimeMove = function () {
-    return this.rpgObject().leTbs_oneTimeMove;
+    return !!this.rpgObject().leTbs_oneTimeMove;
 };
 
 TBSEntity.prototype.oneTimeOffense = function () {
-    return this.rpgObject().leTbs_oneTimeOffense;
+    return !!this.rpgObject().leTbs_oneTimeOffense;
 };
 
 TBSEntity.prototype.getCollapseAnimation = function () {
@@ -6608,11 +8094,13 @@ TBSEntity.prototype.getAiPattern = function () {
 };
 
 TBSEntity.prototype.isPassableOnDeath = function () {
-    var test = this.battler().states().some(function (state) {
-        return state && state.leTbs_passableOnDeath;
+    var test = this.hasNoCorpse();
+    if (test) return true;
+    test = this.battler().states().some(function (state) {
+        return state && !!state.leTbs_passableOnDeath;
     });
     if (test) return true;
-    return this.rpgObject().leTbs_passableOnDeath;
+    return !!this.rpgObject().leTbs_passableOnDeath;
 };
 
 TBSEntity.prototype.isPassable = function () {
@@ -6626,13 +8114,164 @@ TBSEntity.prototype.isPassable = function () {
 };
 
 TBSEntity.prototype.entitiesCanLayOnMe = function () {
-    var test = this._battler.isDead() && this.isPassableOnDeath();
-    if (test) return true;
+    if (this._battler.isDead()) {
+        if (this.hasNoCorpse()) return true;
+        test = this.battler().states().some(function (state) {
+            return state && state.leTbs_canLayOnMeOnDeath;
+        });
+        if (test) return true;
+        return this.rpgObject().leTbs_canLayOnMeOnDeath;
+    }
     test = this.battler().states().some(function (state) {
         return state && state.leTbs_canLayOnMe;
     });
     if (test) return true;
     return this.rpgObject().leTbs_canLayOnMe;
+};
+
+TBSEntity.prototype.hasNoCorpse = function () {
+    for (var i = 0; i < this._battler.states().length; i++) {
+        var state = this._battler.states()[i];
+        if (state && state.leTbs_hasNoCorpse)
+            return true;
+    }
+    if (this._battler.isEnemy())
+        return this._battler.enemy().leTbs_hasNoCorpse;
+    else {
+        for (var i = 0; i < this._battler.equips().length; i++) {
+            var equip = this._battler.equips()[i];
+            if (equip && equip.leTbs_hasNoCorpse)
+                return true;
+        }
+        return this._battler.actor().leTbs_hasNoCorpse;
+    }
+};
+
+TBSEntity.prototype.isFocusedByAI = function (type) {
+    type = type.trim();
+    for (var i = 0; i < this._battler.states().length; i++) {
+        var state = this._battler.states()[i];
+        if (state && state.leTbs_focusedByAiFor[type])
+            return state.leTbs_focusedByAiFor[type];
+    }
+    if (this._battler.isActor()) {
+        for (var i = 0; i < this._battler.equips().length; i++) {
+            var equip = this._battler.equips()[i];
+            if (equip && equip.leTbs_focusedByAiFor[type])
+                return equip.leTbs_focusedByAiFor[type];
+        }
+    }
+    return null;
+};
+
+TBSEntity.prototype.getSpriteScaleX = function () {
+    for (var i = 0; i < this._battler.states().length; i++) {
+        var state = this._battler.states()[i];
+        if (state && state.leTbs_spriteScaleX)
+            return state.leTbs_spriteScaleX;
+    }
+    if (this._battler.isEnemy())
+        return this._battler.enemy().leTbs_spriteScaleX;
+    else {
+        for (var i = 0; i < this._battler.equips().length; i++) {
+            var equip = this._battler.equips()[i];
+            if (equip && equip.leTbs_spriteScaleX)
+                return equip.leTbs_spriteScaleX;
+        }
+        return this._battler.actor().leTbs_spriteScaleX;
+    }
+};
+
+TBSEntity.prototype.getSpriteScaleY = function () {
+    for (var i = 0; i < this._battler.states().length; i++) {
+        var state = this._battler.states()[i];
+        if (state && state.leTbs_spriteScaleY)
+            return state.leTbs_spriteScaleY;
+    }
+    if (this._battler.isEnemy())
+        return this._battler.enemy().leTbs_spriteScaleY;
+    else {
+        for (var i = 0; i < this._battler.equips().length; i++) {
+            var equip = this._battler.equips()[i];
+            if (equip && equip.leTbs_spriteScaleY)
+                return equip.leTbs_spriteScaleY;
+        }
+        return this._battler.actor().leTbs_spriteScaleY;
+    }
+};
+
+TBSEntity.prototype.getSpriteTone = function () {
+    for (var i = 0; i < this._battler.states().length; i++) {
+        var state = this._battler.states()[i];
+        if (state && state.leTbs_spriteTone)
+            return state.leTbs_spriteTone;
+    }
+    if (this._battler.isEnemy())
+        return this._battler.enemy().leTbs_spriteTone;
+    else {
+        for (var i = 0; i < this._battler.equips().length; i++) {
+            var equip = this._battler.equips()[i];
+            if (equip && equip.leTbs_spriteTone)
+                return equip.leTbs_spriteTone;
+        }
+        return this._battler.actor().leTbs_spriteTone;
+    }
+};
+
+TBSEntity.prototype.getSpriteHue = function () {
+    for (var i = 0; i < this._battler.states().length; i++) {
+        var state = this._battler.states()[i];
+        if (state && state.leTbs_spriteHue)
+            return state.leTbs_spriteHue;
+    }
+    if (this._battler.isEnemy())
+        return this._battler.enemy().leTbs_spriteHue;
+    else {
+        for (var i = 0; i < this._battler.equips().length; i++) {
+            var equip = this._battler.equips()[i];
+            if (equip && equip.leTbs_spriteHue)
+                return equip.leTbs_spriteHue;
+        }
+        return this._battler.actor().leTbs_spriteHue;
+    }
+};
+
+TBSEntity.prototype.setOpacity = function (value) {
+    this._sprite.opacity = value;
+};
+
+TBSEntity.prototype.getLoopAnimations = function () {
+    var anims = [];
+    for (var i = 0; i < this._battler.states().length; i++) {
+        var state = this._battler.states()[i];
+        if (state && state.leTbs_loopAnimation)
+            anims.push(state.leTbs_loopAnimation);
+    }
+    if (this._battler.isEnemy()) {
+        if (this._battler.enemy().leTbs_loopAnimation)
+            anims.push(this._battler.enemy().leTbs_loopAnimation);
+    } else {
+        for (var i = 0; i < this._battler.equips().length; i++) {
+            var equip = this._battler.equips()[i];
+            if (equip && equip.leTbs_loopAnimation)
+                anims.push(equip.leTbs_loopAnimation);
+        }
+        if (this._battler.actor().leTbs_loopAnimation)
+            anims.push(this._battler.actor().leTbs_loopAnimation);
+    }
+    return anims;
+};
+
+TBSEntity.prototype.startFlash = function (colorArray, duration, loop) {
+    if (loop)
+        this._sprite.leU_startLoopFlash(colorArray, duration);
+    else
+        this._sprite.leU_startFlash(colorArray, duration);
+};
+
+TBSEntity.prototype.stopFLash = function () {
+    this._sprite.leU_endLoopFlash();
+    this._sprite.leU_clearFlash();
 };
 
 TBSEntity.prototype.getCollisionDamageBonus = function (damage) {
@@ -6748,8 +8387,20 @@ TBSEntity.prototype.getKnockbackReduction = function () {
 };
 
 
+TBSEntity.prototype.filenameID = function () {
+    var battler = this.battler();
+    if (this.rpgObject().leTbs_spriteName)
+        return this.rpgObject().leTbs_spriteName;
+    if (battler.isActor()) return battler.name();
+    return battler.originalName();
+};
+
 TBSEntity.prototype.addPopup = function () {
     this._sprite.addPopup();
+};
+
+TBSEntity.prototype.newAnimation = function (animation, mirror, delay) {
+    this._sprite.newAnimation(animation, mirror, delay);
 };
 
 TBSEntity.prototype.battler = function () {
@@ -6810,7 +8461,7 @@ TBSEntity_Sprite.prototype.initialize = function (battler, entity) {
     this._trajectory = [];
     this._trajectoryEndCell = null;
     this.initializeFrameDelay();
-    this.createBitmaps(battler);
+    this.createBitmaps();
 };
 
 TBSEntity_Sprite.prototype.initializeFrameDelay = function () {
@@ -6856,6 +8507,15 @@ TBSEntity_Sprite.prototype.update = function () {
     this.updateFrameDelay();
     this.updatePosition();
     this.updatePopups();
+    this.updateSpriteEffects();
+    this.checkLoopAnimations();
+};
+
+TBSEntity_Sprite.prototype.updateSpriteEffects = function () {
+    var entity = this._entity;
+    this.scale.x = entity.getSpriteScaleX();
+    this.scale.y = entity.getSpriteScaleY();
+    this.setColorTone(entity.getSpriteTone());
 };
 
 TBSEntity_Sprite.prototype.updateFrameDelay = function () {
@@ -6883,9 +8543,10 @@ TBSEntity_Sprite.prototype.updatePosition = function () {
     this.updateTrajectoryMove();
     this.x = this._entity._posX;
     this.y = this._entity._posY;
+    var bounds = this.getBounds();
     if (this.bitmap) {
-        var w = this.bitmap.width / (this._maxFrame[this.getPose()] + 1);
-        var h = this.bitmap.height / 4;
+        var w = bounds.width;
+        var h = bounds.height;
         this.x += $gameMap.tileWidth() / 2 - w / 2;
         this.y += $gameMap.tileHeight() - h;
     }
@@ -6951,16 +8612,27 @@ TBSEntity_Sprite.prototype.removePopup = function (popup) {
     this._popups.shift();
 };
 
-TBSEntity_Sprite.prototype.createBitmaps = function (battler) {
-    var config = this.getConfig(battler);
+TBSEntity_Sprite.prototype.createBitmaps = function () {
+    var battler = this._battler;
+    var config = this.getConfig();
+    var hue = this._entity.getSpriteHue();
     config.forEach(function (info) {
-        var pose = info[0];
-        var filename = this.filenameID(battler) + info[1];
-        var hue = info[3] || 0;
-        this._poses.push(pose);
-        var fullBitmap = ImageManager.loadLeTBSBattler(filename, hue);
-        fullBitmap.addLoadListener(this.createPoseBitmaps.bind(this, fullBitmap, pose, info));
+        this.processBitmapsConfig(info, hue);
     }.bind(this));
+};
+
+TBSEntity_Sprite.prototype.processBitmapsConfig = function (info, hue) {
+    var pose = info[0];
+    var filename = this.filenameID() + info[1];
+    this._poses.push(pose);
+    if (pose === "dead" && this._entity.hasNoCorpse()) {
+        this._maxFrame["dead"] = 0;
+        this._bitmaps["dead"] = new Bitmap(48, 48);
+        this._frameLoaded++;
+        return;
+    }
+    var fullBitmap = ImageManager.loadLeTBSBattler(filename, hue);
+    fullBitmap.addLoadListener(this.createPoseBitmaps.bind(this, fullBitmap, pose, info));
 };
 
 TBSEntity_Sprite.prototype.createPoseBitmaps = function (fbitmap, pose, info) {
@@ -6979,6 +8651,35 @@ TBSEntity_Sprite.prototype.addPopup = function () {
     BattleManagerTBS.getLayer("movableInfo").addChild(sprite);
 };
 
+TBSEntity_Sprite.prototype.newAnimation = function (id, mirror, delay) {
+    var sprite = new Sprite_TBSEntityAnimation();
+    sprite.setup(this, $dataAnimations[id], mirror, delay);
+    if (this.parent)
+        this.parent.addChild(sprite);
+    else
+        BattleManagerTBS.getLayer("animations").addChild(sprite);
+    this._animationSprites.push(sprite);
+};
+
+TBSEntity_Sprite.prototype.checkLoopAnimations = function () {
+    var anims = this._entity.getLoopAnimations();
+    var exists = {};
+    anims.forEach(function (id) {
+        exists[id] = false;
+    });
+    this._animationSprites.forEach(function (sprite) {
+        for (var i = 0; i < anims.length; i++) {
+            if (sprite._animation.id === anims[i] && sprite.isPlaying())
+                exists[anims[i]] = true;
+        }
+    });
+    anims.forEach(function (id) {
+        if (!exists[id]) {
+            this.newAnimation(id, false, 0);
+        }
+    }.bind(this));
+};
+
 TBSEntity_Sprite.prototype.isReady = function () {
     return this._frameLoaded === this._poses.length;
 };
@@ -6987,8 +8688,8 @@ TBSEntity_Sprite.prototype.getPose = function () {
     return this.isValidPose(this._pose) ? this._pose : "idle";
 };
 
-TBSEntity_Sprite.prototype.getConfig = function (battler) {
-    var id;
+TBSEntity_Sprite.prototype.getConfig = function () {
+    var battler = this._battler, id;
     if (this._entity.rpgObject().leTbs_spriteConfig)
         id = this._entity.rpgObject().leTbs_spriteConfig;
     else
@@ -7002,11 +8703,8 @@ TBSEntity_Sprite.prototype.isValidPose = function (pose) {
     return this._poses.indexOf(pose) >= 0;
 };
 
-TBSEntity_Sprite.prototype.filenameID = function (battler) {
-    if (this._entity.rpgObject().leTbs_spriteName)
-        return this._entity.rpgObject().leTbs_spriteName;
-    if (battler.isActor()) return battler.name();
-    return battler.originalName();
+TBSEntity_Sprite.prototype.filenameID = function () {
+    return this._entity.filenameID();
 };
 
 
@@ -7214,10 +8912,23 @@ function Window_TBSConfirm() {
 }
 
 /*-------------------------------------------------------------------------
-* Window_TBSPlacementInfo
+* Window_TBSPositioning
 -------------------------------------------------------------------------*/
+function Window_TBSPositioning() {
+    this.initialize.apply(this, arguments);
+}
 
-function Window_TBSPlacementInfo() {
+/*-------------------------------------------------------------------------
+* Window_TBSPositioningConfirm
+-------------------------------------------------------------------------*/
+function Window_TBSPositioningConfirm() {
+    this.initialize.apply(this, arguments);
+}
+
+/*-------------------------------------------------------------------------
+* Window_TBSPositioningInfo
+-------------------------------------------------------------------------*/
+function Window_TBSPositioningInfo() {
     this.initialize.apply(this, arguments);
 }
 /*-------------------------------------------------------------------------
@@ -7245,6 +8956,23 @@ function Window_TBSEndCommand() {
 /*=========================================================================
 *	RTPs MODIFS
 =========================================================================*/
+
+
+
+/*-------------------------------------------------------------------------
+* Game_BattlerBase
+-------------------------------------------------------------------------*/
+Game_BattlerBase.prototype.hasConfusionStateAttackAlly = function () {
+    return this.confusionLevel() === 1;
+};
+
+Game_BattlerBase.prototype.hasConfusionStateAttackAnyone = function () {
+    return this.confusionLevel() === 2;
+};
+
+Game_BattlerBase.prototype.hasConfusionStateAttackEnemy = function () {
+    return this.confusionLevel() === 3;
+};
 
 
 /*-------------------------------------------------------------------------
@@ -7378,6 +9106,28 @@ Game_Interpreter.prototype.character = function (param) {
 
 
 /*-------------------------------------------------------------------------
+* TouchInput
+-------------------------------------------------------------------------*/
+Lecode.S_TBS.oldTouchInput_clear = TouchInput.clear;
+TouchInput.clear = function () {
+    Lecode.S_TBS.oldTouchInput_clear.call(this);
+    this._leTBSMoveData = {
+        x: 0,
+        y: 0
+    };
+};
+
+Lecode.S_TBS.oldTouchInput_onMouseMove = TouchInput._onMouseMove;
+TouchInput._onMouseMove = function (event) {
+    Lecode.S_TBS.oldTouchInput_onMouseMove.call(this, event);
+    var x = Graphics.pageToCanvasX(event.pageX);
+    var y = Graphics.pageToCanvasY(event.pageY);
+    this._leTBSMoveData.x = x;
+    this._leTBSMoveData.y = y;
+};
+
+
+/*-------------------------------------------------------------------------
 * DataManager
 -------------------------------------------------------------------------*/
 Lecode.S_TBS.oldDMisDatabaseLoaded_method = DataManager.isDatabaseLoaded;
@@ -7416,7 +9166,9 @@ DataManager.processLeTBSTagsForBattlers = function () {
             obj.leTbs_aiPattern = Lecode.S_TBS.defaultAiPattern;
             obj.leTbs_passable = false;
             obj.leTbs_passableOnDeath = false;
+            obj.leTbs_hasNoCorpse = false;
             obj.leTbs_canLayOnMe = false;
+            obj.leTbs_canLayOnMeOnDeath = false;
             obj.leTbs_collisionDmgBonus = 0;
             obj.leTbs_collisionDmgBonusRate = 0;
             obj.leTbs_collisionDmgReduction = 0;
@@ -7437,6 +9189,12 @@ DataManager.processLeTBSTagsForBattlers = function () {
             obj.leTbs_spriteName = null;
             obj.leTbs_spriteConfig = null;
             obj.leTbs_hideStatusWindow = false;
+            obj.leTbs_spriteScaleX = 1.0;
+            obj.leTbs_spriteScaleY = 1.0;
+            obj.leTbs_spriteTone = [0, 0, 0, 0];
+            obj.leTbs_spriteHue = 0;
+            obj.leTbs_loopAnimation = null;
+            obj.leTbs_aiNoAttack = false;
 
             for (var k = 0; k < notedata.length; k++) {
                 var line = notedata[k];
@@ -7474,8 +9232,12 @@ DataManager.processLeTBSTagsForBattlers = function () {
                         obj.leTbs_passableOnDeath = true;
                     else if (line.match(/passable/i))
                         obj.leTbs_passable = true;
+                    else if (line.match(/has_no_corpse/i))
+                        obj.leTbs_hasNoCorpse = true;
                     else if (line.match(/entities_can_lay_on_me/i))
                         obj.leTbs_canLayOnMe = true;
+                    else if (line.match(/entities_can_lay_on_me_on_death/i))
+                        obj.leTbs_canLayOnMeOnDeath = true;
                     else if (line.match(/collision_damage_bonus\s?:\s?(.+)/i))
                         obj.leTbs_collisionDmgBonus = Number(RegExp.$1);
                     else if (line.match(/collision_damage_bonus\%\s?:\s?(.+)/i))
@@ -7508,6 +9270,25 @@ DataManager.processLeTBSTagsForBattlers = function () {
                         obj.leTbs_spriteConfig = String(RegExp.$1);
                     else if (line.match(/hide_status_window/i))
                         obj.leTbs_hideStatusWindow = true;
+                    else if (line.match(/sprite_scale\s?:\s?(.+)/i)) {
+                        var str = RegExp.$1.split(",");
+                        obj.leTbs_spriteScaleX = Number(str[0].trim());
+                        obj.leTbs_spriteScaleY = Number(str[1].trim());
+                    }
+                    else if (line.match(/sprite_tone\s?:\s?(.+)/i)) {
+                        var str = RegExp.$1.split(",");
+                        var r = Number(str[0].trim());
+                        var g = Number(str[1].trim());
+                        var b = Number(str[1].trim());
+                        var gray = Number(str[1].trim());
+                        obj.leTbs_spriteTone = [r, g, b, gray];
+                    }
+                    else if (line.match(/sprite_hue\s?:\s?(.+)/i))
+                        obj.leTbs_spriteHue = Number(RegExp.$1);
+                    else if (line.match(/loop_animation\s?:\s?(.+)/i))
+                        obj.leTbs_loopAnimation = Number(RegExp.$1);
+                    else if (line.match(/ai_no_attack/i))
+                        obj.leTbs_aiNoAttack = true;
                 }
             }
         }
@@ -7531,7 +9312,9 @@ DataManager.processLeTBSTagsForEquipmentsAndStates = function () {
             obj.leTbs_moveScopeParam = null;
             obj.leTbs_passable = false;
             obj.leTbs_passableOnDeath = false;
+            obj.leTbs_hasNoCorpse = false;
             obj.leTbs_canLayOnMe = false;
+            obj.leTbs_canLayOnMeOnDeath = false;
             obj.leTbs_collisionDmgBonus = 0;
             obj.leTbs_collisionDmgBonusRate = 0;
             obj.leTbs_collisionDmgReduction = 0;
@@ -7549,6 +9332,10 @@ DataManager.processLeTBSTagsForEquipmentsAndStates = function () {
                 back: 0,
                 side: 0
             };
+            obj.leTbs_onlyDeadTargets = false;
+            obj.leTbs_allowDeadTargets = false;
+            obj.leTbs_loopAnimation = null;
+            obj.leTbs_focusedByAiFor = {};
 
             for (var k = 0; k < notedata.length; k++) {
                 var line = notedata[k];
@@ -7558,7 +9345,7 @@ DataManager.processLeTBSTagsForEquipmentsAndStates = function () {
                     letbs = false;
 
                 if (letbs) {
-                    if (line.match(/move_points_plus\s?:\s?(.+)/i))
+                    if (line.match(/move_points\s?:\s?(.+)/i))
                         obj.leTbs_movePointsPlus = Number(RegExp.$1);
                     else if (line.match(/scope\s?:\s?(.+)/i))
                         obj.leTbs_scopeData = String(RegExp.$1);
@@ -7574,8 +9361,12 @@ DataManager.processLeTBSTagsForEquipmentsAndStates = function () {
                         obj.leTbs_passableOnDeath = true;
                     else if (line.match(/passable/i))
                         obj.leTbs_passable = true;
+                    else if (line.match(/has_no_corpse/i))
+                        obj.leTbs_hasNoCorpse = true;
                     else if (line.match(/entities_can_lay_on_me/i))
                         obj.leTbs_canLayOnMe = true;
+                    else if (line.match(/entities_can_lay_on_me_on_death/i))
+                        obj.leTbs_canLayOnMeOnDeath = true;
                     else if (line.match(/collision_damage_bonus\s?:\s?(.+)/i))
                         obj.leTbs_collisionDmgBonus = Number(RegExp.$1);
                     else if (line.match(/collision_damage_bonus\%\s?:\s?(.+)/i))
@@ -7606,6 +9397,14 @@ DataManager.processLeTBSTagsForEquipmentsAndStates = function () {
                         obj.leTbs_directionalDmgBonus.side = Number(RegExp.$1);
                     else if (line.match(/side_dmg_reduction\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgReduction.side = Number(RegExp.$1);
+                    else if (line.match(/only_dead_targets/i))
+                        obj.leTbs_onlyDeadTargets = true;
+                    else if (line.match(/allow_dead_targets/i))
+                        obj.leTbs_allowDeadTargets = true;
+                    else if (line.match(/loop_animation\s?:\s?(.+)/i))
+                        obj.leTbs_loopAnimation = Number(RegExp.$1);
+                    else if (line.match(/focused_by_ai_for_(.+)\s?:\s?(.+)/i))
+                        obj.leTbs_focusedByAiFor[RegExp.$1] = Number(RegExp.$2);
                 }
             }
         }
@@ -7620,6 +9419,8 @@ DataManager.processLeTBSTagsForObjects = function () {
             var obj = group[j];
             var notedata = obj.note.split(/[\r\n]+/);
             var letbs = false;
+            var letbs_ai = false;
+            var letbs_sequence = false;
 
             obj.leTbs_scopeData = null;
             obj.leTbs_aoeData = null;
@@ -7628,7 +9429,6 @@ DataManager.processLeTBSTagsForObjects = function () {
             obj.leTbs_maxUse = 1;
             obj.leTbs_scopeParam = [];
             obj.leTbs_aoeParam = [];
-            obj.leTbs_aiOffenseType = null;
             obj.leTbs_collisionFormula = null;
             obj.leTbs_directionalDmgBonus = {
                 face: 0,
@@ -7640,6 +9440,19 @@ DataManager.processLeTBSTagsForObjects = function () {
                 back: 0,
                 side: 0
             };
+            obj.leTbs_aiConfig = {
+                type: "",
+                use_condition: "true",
+                escape_condition: "true",
+                rush_condition: "true",
+                use_on_dead: false,
+                maximise_targets: false,
+                summon_near: "enemies",
+                avoid_friendly_fire: 0
+            };
+            obj.leTbs_sequence = [];
+            obj.leTbs_loopAnimation = null;
+            obj.leTbs_changeMovePoints = "0";
 
             for (var k = 0; k < notedata.length; k++) {
                 var line = notedata[k];
@@ -7647,6 +9460,14 @@ DataManager.processLeTBSTagsForObjects = function () {
                     letbs = true;
                 else if (line.match(/<\/letbs>/i))
                     letbs = false;
+                else if (line.match(/<letbs_ai>/i))
+                    letbs_ai = true;
+                else if (line.match(/<\/letbs_ai>/i))
+                    letbs_ai = false;
+                else if (line.match(/<letbs_sequence>/i))
+                    letbs_sequence = true;
+                else if (line.match(/<\/letbs_sequence>/i))
+                    letbs_sequence = false;
 
                 if (letbs) {
                     if (line.match(/scope\s?:\s?(.+)/i))
@@ -7663,8 +9484,6 @@ DataManager.processLeTBSTagsForObjects = function () {
                         obj.leTbs_scopeParam = String(RegExp.$1);
                     else if (line.match(/aoe_options\s?:\s?((.|\n)*)/i))
                         obj.leTbs_aoeParam = String(RegExp.$1);
-                    else if (line.match(/ai_offense_type/i))
-                        obj.leTbs_aiOffenseType = true;
                     else if (line.match(/collision_formula\s?:\s?(.+)/i))
                         obj.leTbs_collisionFormula = String(RegExp.$1);
                     else if (line.match(/knockback_bonus\s?:\s?(.+)/i))
@@ -7683,6 +9502,31 @@ DataManager.processLeTBSTagsForObjects = function () {
                         obj.leTbs_directionalDmgBonus.side = Number(RegExp.$1);
                     else if (line.match(/side_dmg_reduction\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgReduction.side = Number(RegExp.$1);
+                    else if (line.match(/loop_animation\s?:\s?(.+)/i))
+                        obj.leTbs_loopAnimation = Number(RegExp.$1);
+                    else if (line.match(/change_move_points\s?:\s?(.+)/i))
+                        obj.leTbs_changeMovePoints = String(RegExp.$1);
+                }
+                else if (letbs_ai) {
+                    if (line.match(/type\s?:\s?(.+)/i))
+                        obj.leTbs_aiConfig.type = String(RegExp.$1);
+                    else if (line.match(/use_condition\s?:\s?(.+)/i))
+                        obj.leTbs_aiConfig.use_condition = String(RegExp.$1);
+                    else if (line.match(/escape_condition\s?:\s?(.+)/i))
+                        obj.leTbs_aiConfig.escape_condition = String(RegExp.$1);
+                    else if (line.match(/rush_condition\s?:\s?(.+)/i))
+                        obj.leTbs_aiConfig.rush_condition = String(RegExp.$1);
+                    else if (line.match(/use_on_dead/i))
+                        obj.leTbs_aiConfig.use_on_dead = true;
+                    else if (line.match(/maximise_targets/i))
+                        obj.leTbs_aiConfig.maximise_targets = true;
+                    else if (line.match(/avoid_friendly_fire\s?:\s?(.+)\%/i))
+                        obj.leTbs_aiConfig.avoid_friendly_fire = Number(RegExp.$1) * 0.01;
+                    else if (line.match(/summon_near\s?:\s?(.+)/i))
+                        obj.leTbs_aiConfig.summon_near = String(RegExp.$1);
+                }
+                else if (letbs_sequence) {
+                    obj.leTbs_sequence.push(line);
                 }
             }
         }
@@ -7694,10 +9538,6 @@ DataManager.processLeTBSTagsForObjects = function () {
 -------------------------------------------------------------------------*/
 ImageManager.loadLeTBS = function (filename, hue) {
     return this.loadBitmap('img/leTBS/', filename, hue, true);
-};
-
-ImageManager.loadLeTBSTurnOrder = function (filename, hue) {
-    return this.loadBitmap('img/leTBS/TurnOrder/', filename, hue, true);
 };
 
 ImageManager.loadLeTBSBattler = function (filename, hue) {

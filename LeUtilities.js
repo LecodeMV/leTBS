@@ -116,8 +116,8 @@ LeUtilities.getXRandomValuesInArray = function(array, x) {
 };
 
 LeUtilities.removeInArray = function(array, element) {
-    if (array.contains(element)) {
-        var index = array.indexOf(element);
+    var index = array.indexOf(element);
+    if (index > -1) {
         array.splice(index, 1);
     }
 };
@@ -166,7 +166,7 @@ LeUtilities.uniqArray = function(array) {
     });*/
     var func = function(value, index, self) {
         return self.indexOf(value) === index;
-    }
+    };
     return array.filter(func);
 };
 
@@ -176,7 +176,7 @@ LeUtilities.uniqArray = function(array) {
 
 Sprite.prototype.leU_left = function() {
     return this.x - Math.floor(this.leU_trueWidth() * (this.anchor ? this.anchor.x : 0));
-}
+};
 
 Sprite.prototype.leU_right = function() {
     return this.leU_left() + this.leU_trueWidth();
@@ -260,7 +260,7 @@ var oldSpriteUpdate1 = Sprite.prototype.update;
 Sprite.prototype.update = function() {
     oldSpriteUpdate1.call(this);
     this.leU_updateFlash();
-}
+};
 
 Sprite.prototype.leU_updateFlash = function() {
     if (this._leU_flashDuration > 0) {
@@ -610,10 +610,18 @@ LeUtilities.randValueBetween = function(min, max) {
 /*-------------------------------------------------------------------------
 * Version 2.4
 -------------------------------------------------------------------------*/
+var oldTI_onMouseMove = TouchInput._onMouseMove;
+TouchInput._onMouseMove = function (event) {
+    oldTI_onMouseMove.call(this, event);
+    this._leMouseX = event.pageX;
+    this._leMouseY = event.pageY;
+};
+
 Window_Base.prototype.isMouseInsideFrame = function() {
-    var x = this.canvasToLocalX(TouchInput._leMouseX || -1);
+    return this.getBounds().contains(TouchInput._leMouseX, TouchInput._leMouseY);
+    /*var x = this.canvasToLocalX(TouchInput._leMouseX || -1);
     var y = this.canvasToLocalY(TouchInput._leMouseY || -1);
-    return x >= 0 && y >= 0 && x < this.width && y < this.height;
+    return x >= 0 && y >= 0 && x < this.width && y < this.height;*/
 };
 
 function LeU_WindowScrollable() {
@@ -761,4 +769,48 @@ LeUtilities.resetMapEvents = function() {
         }
         events[i].refresh();
     }
+};
+
+
+/*-------------------------------------------------------------------------
+* Version 2.7
+-------------------------------------------------------------------------*/
+LeUtilities.sumOfArray = function (array) {
+    if (array.length === 0) return 0;
+    return array.reduce(function(a,b){
+        return a + b;
+    });
+};
+
+LeUtilities.avgOfArray = function (array) {
+    return this.sumOfArray(array) / array.length;
+};
+LeUtilities.getMinInArrayBy = function(array,prop) {
+    return array.sort(function(a, b) {
+        return (a[prop] > b[prop]) ? 1 : ((a[prop] < b[prop]) ? -1 : 0);
+    }.bind(this))[0];
+};
+
+LeUtilities.getMaxInArrayBy = function(array,prop) {
+    return array.sort(function(a, b) {
+        return (a[prop] > b[prop]) ? 1 : ((a[prop] < b[prop]) ? -1 : 0);
+    }.bind(this)).pop();
+};
+
+
+/*-------------------------------------------------------------------------
+* Version 2.8
+-------------------------------------------------------------------------*/
+LeUtilities.hexToRgb = function(hex) {
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+};
+
+LeUtilities.doesResourceExist = function(path) {
+    var bitmap = Bitmap.load(path);
+    return !bitmap.isError();
 };
