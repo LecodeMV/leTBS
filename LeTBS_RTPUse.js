@@ -125,6 +125,35 @@ TBSTurnOrderVisual.prototype.getSpriteBitmap = function (entity) {
 
 
 /*-------------------------------------------------------------------------
+* Window_TBSStatus
+-------------------------------------------------------------------------*/
+Lecode.S_TBS.RTPUse.oldWindowTBSStatus_drawSprite = Window_TBSStatus.prototype.drawSprite;
+Window_TBSStatus.prototype.drawSprite = function (x, y) {
+    var auto = this._entity.rpgObject().leTbs_autoTurnOrderFace;
+    if (auto) {
+        var sprite = this._entity._sprite;
+        var fbitmap = sprite._bitmaps["idle"];
+        var pw = fbitmap.width / (sprite._maxFrame["idle"] + 1);
+        var ph = fbitmap.height / 4;
+        var window = this;
+        var dx = eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxW) / 2 - pw / 2;
+        var dy = 20 + eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxH) / 2 - ph / 2;
+        this.contents.blt(fbitmap, 0, 0, pw, ph, dx, dy);
+        /*var pw = fbitmap.width / (sprite._maxFrame["idle"] + 1);
+        var ph = fbitmap.height / 4;
+        var bitmap = new Bitmap(pw, ph);
+        bitmap.blt(fbitmap, pw / 2 - 20, 0, pw, ph);
+        var window = this;
+        var dx = eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxW) / 2 - bitmap.width / 2;
+        var dy = 20 + eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxH) / 2 - bitmap.height / 2;
+        this.contents.blt(bitmap, 0, 0, bitmap.width, bitmap.height, dx, dy);*/
+        return;
+    }
+    Lecode.S_TBS.RTPUse.oldWindowTBSStatus_drawSprite.call(this, x, y);
+};
+
+
+/*-------------------------------------------------------------------------
 * DataManager
 -------------------------------------------------------------------------*/
 Lecode.S_TBS.RTPUse.oldDataManager_processLeTBSTags = DataManager.processLeTBSTags;
@@ -146,6 +175,7 @@ DataManager.processLeTBS_RTPUseTagsForBattlers = function () {
             obj.leTbs_characterIndex = null;
             obj.leTbs_useCharacter = false;
             obj.leTbs_autoTurnOrderFace = false;
+            obj.leTbs_autoStatusSprite = false;
 
             for (var k = 0; k < notedata.length; k++) {
                 var line = notedata[k];
@@ -163,6 +193,8 @@ DataManager.processLeTBS_RTPUseTagsForBattlers = function () {
                         obj.leTbs_useCharacter = true;
                     else if (line.match(/auto_turn_order_face/i))
                         obj.leTbs_autoTurnOrderFace = true;
+                    else if (line.match(/auto_status_sprite/i))
+                        obj.leTbs_autoStatusSprite = true;
                 }
             }
         }

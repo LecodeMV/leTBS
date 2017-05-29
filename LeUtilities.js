@@ -166,7 +166,7 @@ LeUtilities.uniqArray = function(array) {
     });*/
     var func = function(value, index, self) {
         return self.indexOf(value) === index;
-    }
+    };
     return array.filter(func);
 };
 
@@ -176,7 +176,7 @@ LeUtilities.uniqArray = function(array) {
 
 Sprite.prototype.leU_left = function() {
     return this.x - Math.floor(this.leU_trueWidth() * (this.anchor ? this.anchor.x : 0));
-}
+};
 
 Sprite.prototype.leU_right = function() {
     return this.leU_left() + this.leU_trueWidth();
@@ -610,10 +610,18 @@ LeUtilities.randValueBetween = function(min, max) {
 /*-------------------------------------------------------------------------
 * Version 2.4
 -------------------------------------------------------------------------*/
+var oldTI_onMouseMove = TouchInput._onMouseMove;
+TouchInput._onMouseMove = function (event) {
+    oldTI_onMouseMove.call(this, event);
+    this._leMouseX = event.pageX;
+    this._leMouseY = event.pageY;
+};
+
 Window_Base.prototype.isMouseInsideFrame = function() {
-    var x = this.canvasToLocalX(TouchInput._leMouseX || -1);
+    return this.getBounds().contains(TouchInput._leMouseX, TouchInput._leMouseY);
+    /*var x = this.canvasToLocalX(TouchInput._leMouseX || -1);
     var y = this.canvasToLocalY(TouchInput._leMouseY || -1);
-    return x >= 0 && y >= 0 && x < this.width && y < this.height;
+    return x >= 0 && y >= 0 && x < this.width && y < this.height;*/
 };
 
 function LeU_WindowScrollable() {

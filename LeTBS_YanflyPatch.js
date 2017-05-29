@@ -52,6 +52,12 @@ if (Imported.YEP_BattleEngineCore) {
             this.setupCriticalEffect();
         }
     };
+    
+    BattleManager.processVictory = function() {
+        this._victoryPhase = true;
+        if (this._windowLayer) this._windowLayer.x = 0;
+        Yanfly.BEC.BattleManager_processVictory.call(this);
+    };
 
 } //- YEP_BattleEngineCore
 

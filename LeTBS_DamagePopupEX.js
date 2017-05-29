@@ -3,7 +3,7 @@
 # LeTBS: Damage Popup EX
 # LeTBS_DamagePopupEX.js
 # By Lecode
-# Version 1.0
+# Version 1.1
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
@@ -12,6 +12,7 @@
 # Version History
 #-----------------------------------------------------------------------------
 # - 1.0 : Initial release
+# - 1.1 : Support move points popup
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -22,7 +23,7 @@ Lecode.S_TBS.DamagePopupEX = {};
 /*:
  * @plugindesc Improve popups and show states alterations
  * @author Lecode
- * @version 1.0
+ * @version 1.1
  *
  * @help
  * ...
@@ -38,13 +39,26 @@ Lecode.S_TBS.DamagePopupEX.shiftY = 34;
 
 
 /*-------------------------------------------------------------------------
+* TBSEntity
+-------------------------------------------------------------------------*/
+TBSEntity.prototype.prepareExtraPopups = function () {
+    var sprite = this._sprite;
+    sprite._popupsInfo.movePoints = this.getMovePoints();
+};
+
+Lecode.S_TBS.DamagePopupEX.oldTBSEntity_onTurnEnd = TBSEntity.prototype.onTurnEnd;
+TBSEntity.prototype.onTurnEnd = function () {
+    this.prepareExtraPopups();
+    Lecode.S_TBS.DamagePopupEX.oldTBSEntity_onTurnEnd.call(this);
+};
+
+/*-------------------------------------------------------------------------
 * TBSEntity_Sprite
 -------------------------------------------------------------------------*/
 Lecode.S_TBS.DamagePopupEX.oldTBSEntitySprite_initialize = TBSEntity_Sprite.prototype.initialize;
 TBSEntity_Sprite.prototype.initialize = function (battler, entity) {
     Lecode.S_TBS.DamagePopupEX.oldTBSEntitySprite_initialize.call(this, battler, entity);
     this._popupsInfo = {};
-    this._popupsInfo.movePoints = entity.getMovePoints();
 };
 
 Lecode.S_TBS.DamagePopupEX.oldTBSEntitySprite_addPopup = TBSEntity_Sprite.prototype.addPopup;
@@ -54,16 +68,15 @@ TBSEntity_Sprite.prototype.addPopup = function () {
     Lecode.S_TBS.DamagePopupEX.oldTBSEntitySprite_addPopup.call(this);
     var addedStates = result.addedStateObjects();
     var removedStates = result.removedStateObjects();
-    var diffMovePts = this._entity.getMovePoints() - this._popupsInfo.movePoints;
-    console.log("diffMovePts:" ,diffMovePts);
+    var diffMovePts = this._popupsInfo.movePoints ? this._entity.getMovePoints() - this._popupsInfo.movePoints : 0;
+    if (diffMovePts !== 0)
+        this.addExtraPopup("movePoints", [diffMovePts]);
     while (addedStates.length > 0) {
         this.addExtraPopup("addedState", [addedStates.shift()]);
     }
     while (removedStates.length > 0) {
         this.addExtraPopup("removedState", [removedStates.shift()]);
     }
-    if (diffMovePts !== 0)
-        this.addExtraPopup("movePoints", [diffMovePts]);
     this._popupsInfo.movePoints = this._entity.getMovePoints();
 };
 
@@ -142,9 +155,7 @@ Sprite_Damage.prototype.createMovePoints = function (value) {
     sprite.x = - this.digitWidth() * 0.8;
     var y = h / 2 - sprite.bitmap.fontSize / 2;
     var x = textW;
-    this.drawText(sprite, text, 0, y, w);
-    //sprite.bitmap.blt(digits.bitmap, 0, 0, digits.width, digits.height, x, y);
-    //this.removeChild(digits);
+    this.drawText(sprite, text, 12, y, w);
     this._flashColor = [175, 175, 0, 160];
     this._flashDuration = 90;
     

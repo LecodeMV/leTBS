@@ -137,17 +137,7 @@ Lecode.S_TBS.Config.Marks = {
         body_anim: 143,
         size: "circle(0)",
         triggers: {
-            "stepping": {
-                stop_movement: false,
-                skill_effects: 24,
-                effects_aoe: "circle(0)"
-            },
-            "turn_start": {
-                stop_movement: false,
-                skill_effects: 24,
-                effects_aoe: "circle(0)"
-            },
-            "turn_end": {
+            "stepping, turn_start, turn_end": {
                 stop_movement: false,
                 skill_effects: 24,
                 effects_aoe: "circle(0)"
@@ -334,7 +324,21 @@ Lecode.S_TBS.Config.Summons = {
             mhp: "60%",
             mmp: "+10%"
         }
-    }
+    },
+
+    "fire_chicken": {
+        active: true,
+        turn_order: "after_caster",
+        visible_in_timeline: true,
+        type: "ai_playable",
+        kind: "actor",
+        id: 12,
+        tied_to_caster: false,
+        stats: {
+            default: "90%",
+            mhp: "15%"
+        }
+    },
 };
 
 /*-------------------------------------------------------------------------
@@ -448,7 +452,7 @@ Lecode.S_TBS.Config.Sequences = {
     "atk": [
         "play_pose: user, atk",
         "wait: 10",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
         "wait: 60"
     ],
 
@@ -474,27 +478,27 @@ Lecode.S_TBS.Config.Sequences = {
 
     "skill": [
         "call: pre-skill",
-        "effects: aoe_all_battlers, current_obj, obj_anim, 0, true",
+        "effects: {aoe}_battlers, current_obj, obj_anim, 0, true",
         "call: post-skill"
     ],
 
     "map_skill": [
         "call: pre-skill",
-        "map_effects: aoe, current_obj, obj_anim, 0, true",
+        "map_effects: {aoe}, current_obj, obj_anim, 0, true",
         "call: post-skill"
     ],
 
     "item": [
         "play_pose: user, item",
         "wait: 10",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
         "wait: 60"
     ],
 
     "skill_neutral": [
         "play_pose: user, cast",
         "wait: 15",
-        "effects: aoe_all_battlers, current_obj, obj_anim, 0, true",
+        "effects: {aoe}_battlers, current_obj, obj_anim, 0, true",
         "play_pose: user, idle",
         "wait: 20"
     ],
@@ -502,7 +506,7 @@ Lecode.S_TBS.Config.Sequences = {
     "map_skill_neutral": [
         "play_pose: user, cast",
         "wait: 15",
-        "map_effects: aoe, current_obj, obj_anim, 0, true",
+        "map_effects: {aoe}, current_obj, obj_anim, 0, true",
         "play_pose: user, idle",
         "wait: 20"
     ],
@@ -511,7 +515,15 @@ Lecode.S_TBS.Config.Sequences = {
         "play_pose: user, atk",
         "wait: 10",
         "projectile: bow_arrow, user_cell, cursor_cell",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
+        "wait: 60"
+    ],
+    
+    "projectile": [
+        "play_pose: user, atk",
+        "wait: 10",
+        "projectile: $1, user_cell, {aoe}",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
         "wait: 60"
     ],
 
@@ -522,9 +534,9 @@ Lecode.S_TBS.Config.Sequences = {
 
     "summon": [
         "call: pre-skill",
-        "map_anim: cursor_cell, obj_anim",
+        "map_anim: {aoe}, obj_anim",
         "wait: 15",
-        "summon: $1, cursor_cell",
+        "summon: $1, {aoe}",
         "call: post-skill"
     ],
 
@@ -535,10 +547,10 @@ Lecode.S_TBS.Config.Sequences = {
     "repulsive_blow": [
         "play_pose: user, atk",
         "wait: 10",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
-        "set_speed: aoe_all_battlers, +6",
-        "push: aoe_all_battlers, user_cell, 1",
-        "set_speed: aoe_all_battlers, reset",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
+        "set_speed: {aoe}_battlers, +6",
+        "push: {aoe}_battlers, user_cell, 1",
+        "set_speed: {aoe}_battlers, reset",
         "wait: 60"
     ],
 
@@ -547,7 +559,7 @@ Lecode.S_TBS.Config.Sequences = {
         "wait: 15",
         "jump_to_cell: user, cursor_cell",
         "play_pose: user, atk",
-        "map_effects: aoe-user_cell, current_obj, obj_anim"
+        "map_effects: {aoe}-user_cell, current_obj, obj_anim"
     ],
 
     "rush": [
@@ -562,7 +574,7 @@ Lecode.S_TBS.Config.Sequences = {
         "set_speed: user, reset",
         "set_frame: user, atk, last",
         "wait: 12",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
         "wait: 20",
         "play_pose: user, idle",
         "wait: 10"
@@ -572,15 +584,15 @@ Lecode.S_TBS.Config.Sequences = {
         "play_pose: user, atk",
         "wait: 10",
         "projectile: phantom_slash, user_cell, cursor_cell",
-        "effects: aoe_all_battlers, current_obj, 153",
+        "effects: {aoe}_battlers, current_obj, 153",
         "anim: user, 154",
         "wait: 20",
-        "reach_target: user, aoe_all_battlers, back, true",
+        "reach_target: user, {aoe}_battlers, back, true",
         "anim: user, 155",
-        "look_at: user, aoe_all_battlers",
+        "look_at: user, {aoe}_battlers",
         "play_pose: user, atk",
         "wait: 10",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
         "wait: 60"
     ],
 
@@ -590,7 +602,7 @@ Lecode.S_TBS.Config.Sequences = {
         "call: pre-skill",
         "map_anim: cursor_cell, obj_anim",
         "wait: 20",
-        "effects: aoe_all_battlers, current_obj",
+        "effects: {aoe}_battlers, current_obj",
         "call: post-skill"
     ],
 
@@ -601,7 +613,7 @@ Lecode.S_TBS.Config.Sequences = {
     ],
 
     "lightning_storm_effects": [
-        "effects: 1_random_battlers_in_aoe, current_obj, obj_anim",
+        "effects: 1_battlers_in_{aoe}, current_obj, obj_anim",
         "wait: 60"
     ],
 
@@ -612,13 +624,12 @@ Lecode.S_TBS.Config.Sequences = {
     ],
 
     "fire_storm_effects": [
-        "map_effects: 1_random_cells_in_aoe, current_obj, obj_anim",
+        "map_effects: 1_random_cells_in_{aoe}, current_obj, obj_anim",
         "wait: 60"
     ],
 
     "fire_support": [
-        //"ask_call: fire_support_attack, allies_at_distance_1_from_cursor_cell",
-        "ask_call: fire_support_attack, allies_in_circle(1)",
+        "ask_call: fire_support_attack, {circle(1)}_allies -cursor_battler",
         "call: skill"
     ],
 
@@ -631,16 +642,16 @@ Lecode.S_TBS.Config.Sequences = {
 
     "volcano_ground": [
         "call: pre-skill",
-        "map_anim: aoe, obj_anim",
+        "map_anim: {aoe}, obj_anim",
         "wait: 20",
-        "mark: volcano_cell, aoe",
+        "mark: volcano_cell, {aoe}",
         "wait: 60",
         "call: post-skill"
     ],
 
     "walking_fire": [
         "call: pre-skill",
-        "call_for_every_cell: walking_fire_dmg, aoe, close->far",
+        "call_for_every_cell: walking_fire_dmg, {aoe}, close->far",
         "call: post-skill"
     ],
 
@@ -654,7 +665,7 @@ Lecode.S_TBS.Config.Sequences = {
         "call: pre-skill",
         "map_anim: cursor_cell, obj_anim",
         "wait: 30",
-        "summon: ice_block, aoe",
+        "summon: ice_block, {aoe}",
         "call: post-skill"
     ],
 
@@ -662,7 +673,7 @@ Lecode.S_TBS.Config.Sequences = {
         "call: pre-skill",
         "map_anim: cursor_cell, obj_anim",
         "wait: 30",
-        "summon: ice_block, aoe",
+        "summon: ice_block, {aoe}",
         "call: post-skill"
     ],
 
@@ -684,9 +695,9 @@ Lecode.S_TBS.Config.Sequences = {
 
     "heal": [
         "call: pre-skill",
-        "anim: aoe_all_battlers, obj_anim",
+        "anim: {aoe}_battlers, obj_anim",
         "wait: 20",
-        "effects: aoe_all_battlers, current_obj",
+        "effects: {aoe}_battlers, current_obj",
         "call: post-skill"
     ],
 
@@ -703,9 +714,9 @@ Lecode.S_TBS.Config.Sequences = {
     "salvation": [
         "call: pre-skill",
         "anim: user, obj_anim",
-        "pull: aoe_all_allies-user, user_cell, 2, false",
+        "pull: {aoe}_all_allies-user, user_cell, 2, false",
         "wait: 20",
-        "effects: aoe_all_allies-user, current_obj",
+        "effects: {aoe}_all_allies-user, current_obj",
         "wait: 60",
         "call: post-skill"
     ],
@@ -714,10 +725,10 @@ Lecode.S_TBS.Config.Sequences = {
         "script: user.setDir(user._lastDir);",
         "call: pre-skill",
         "set_battler_targets: battler_toward_user",
-        "anim: last_battler_targets, 129",
+        "anim: last_targets, 129",
         "wait: 40",
-        "move_to_cell: last_battler_targets, cursor_cell, true",
-        "anim: last_battler_targets, 130",
+        "move_to_cell: last_targets, cursor_cell, true",
+        "anim: last_targets, 130",
         "wait: 60",
         "call: post-skill"
     ],
@@ -734,7 +745,7 @@ Lecode.S_TBS.Config.Sequences = {
     "ghost_arrow": [
         "call: pre-skill",
         "projectile: ghost_arrow, user_cell, cursor_cell",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
         "wait: 60",
         "call: post-skill"
     ],
@@ -750,7 +761,7 @@ Lecode.S_TBS.Config.Sequences = {
 
     "fire_arrows": [
         "call: pre-skill",
-        "call_for_every_entity: fire_arrow_dmg, aoe",
+        "call_for_every_entity: fire_arrow_dmg, {aoe}_battlers",
         "call: post-skill"
     ],
 
@@ -770,19 +781,19 @@ Lecode.S_TBS.Config.Sequences = {
     "great_wind": [
         "call: pre-skill",
         "projectile: great_wind, user_cell, cursor_cell",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
-        "set_speed: aoe_all_battlers, +12",
-        "push: aoe_all_battlers, user_cell, 3",
-        "set_speed: aoe_all_battlers, reset",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
+        "set_speed: {aoe}_battlers, +12",
+        "push: {aoe}_battlers, user_cell, 3",
+        "set_speed: {aoe}_battlers, reset",
         "call: post-skill"
     ],
 
     "transposition": [
         "call: pre-skill",
         "anim: user, obj_anim",
-        "anim: aoe_all_battlers, obj_anim",
+        "anim: {aoe}_battlers, obj_anim",
         "wait: 40",
-        "switch_cells: user, aoe_all_battlers",
+        "switch_cells: user, {aoe}_battlers",
         "call: post-skill"
     ],
 
@@ -796,9 +807,9 @@ Lecode.S_TBS.Config.Sequences = {
 
     "shamanism": [
         "call: pre-skill",
-        "anim: aoe_all_battlers, obj_anim",
+        "anim: {aoe}_battlers, obj_anim",
         "wait: 20",
-        "call_for_every_entity: shamanism_effects, aoe",
+        "call_for_every_entity: shamanism_effects, {aoe}_dead_battlers",
         "call: post-skill"
     ],
 
@@ -813,7 +824,7 @@ Lecode.S_TBS.Config.Sequences = {
     "fire_ball": [
         "call: pre-skill",
         "projectile: fire_ball, user_cell, cursor_cell",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
         "wait: 60",
         "call: post-skill"
     ],
@@ -864,10 +875,10 @@ Lecode.S_TBS.Config.Sequences = {
         "look_at: user, cursor_cell",
         "move_straight: user, 2",
         "wait: 10",
-        "effects: aoe_all_battlers, current_obj, obj_anim",
-        "look_away: aoe_all_battlers, user_cell",
+        "effects: {aoe}_battlers, current_obj, obj_anim",
+        "look_away: {aoe}_battlers, user_cell",
         "wait: 5",
-        "delegate_call: rush_sup_action, aoe_all_battlers"
+        "delegate_call: rush_sup_action, {aoe}_battlers"
     ],
 
     "rush_sup_action": [
@@ -875,11 +886,11 @@ Lecode.S_TBS.Config.Sequences = {
         "move_straight: user, 2",
         "wait: 10",
         "set_battler_targets: battler_toward_user",
-        "effects: last_battler_targets, current_obj, obj_anim",
-        "look_away: last_battler_targets, user_cell",
+        "effects: last_targets, current_obj, obj_anim",
+        "look_away: last_targets, user_cell",
         "wait: 5",
         "end_delegated_call:",
-        "delegate_call: rush_sup_action, last_battler_targets"
+        "delegate_call: rush_sup_action, last_targets"
     ],
     
 
@@ -925,10 +936,8 @@ Lecode.S_TBS.Config.AI = {
             "set_action: healing, average",
             "move_for_action: null",
             "use: defined_action",
-            "call_behavior: after_healing",
-        "else",
-            "move: toward_enemies, 100%",
-        "endif"
+        "end",
+        "call_behavior: after_healing"
     ],
 
     "after_healing": [
@@ -962,7 +971,7 @@ Lecode.S_TBS.Config.AI = {
             "call_behavior: escape",
         "else",
             "if: pattern('ranged_fighter')",
-                "move: away_enemies, 25%",
+                "call_behavior: smart_move_away_enemies",
             "else",
                 "move: toward_enemies, 100%",
             "endif",
@@ -1020,7 +1029,7 @@ Lecode.S_TBS.Config.AI = {
                 "call_behavior: smart_move_away_enemies",
             "else",
                 "if: !isInMeleeWith('defined_target')",
-                    "move: toward_enemies, 50%",
+                    "move: toward_enemies, 100%",
                 "endif",
             "endif",
         "endif"
@@ -1049,7 +1058,7 @@ Lecode.S_TBS.Config.AI = {
 
     "smart_move_away_enemies": [
         "if: distanceToEnemies() >= entity.getMovePoints() * 2",
-            "move: toward_enemies, 50%",
+            "move: toward_enemies, 75%",
         "else",
             "move: away_enemies, 100%",
         "endif",

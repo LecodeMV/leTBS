@@ -33,26 +33,6 @@ var parameters = PluginManager.parameters('LeTBS_EntityHud');
 
 
 
-/*-------------------------------------------------------------------------
-* Scene_Battle
--------------------------------------------------------------------------*/
-Lecode.S_TBS.EntityHud.oldSB_createAllWindows = Scene_Battle.prototype.createAllWindows;
-Scene_Battle.prototype.createAllWindows = function () {
-    Lecode.S_TBS.EntityHud.oldSB_createAllWindows.call(this);
-    if (Lecode.S_TBS.commandOn) {
-        this.createEntityHudContainer();
-    }
-};
-
-Scene_Battle.prototype.createEntityHudContainer = function () {
-    this._entityHudContainer = new Window_Base();
-    this.addWindow(this._entityHudContainer);
-};
-
-Scene_Battle.prototype.addEntityHud = function (hud) {
-    this._entityHudContainer.addChild(hud);
-};
-
 
 /*-------------------------------------------------------------------------
 * TBSEntity
@@ -62,7 +42,6 @@ TBSEntity.prototype.createComponents = function () {
     Lecode.S_TBS.EntityHud.oldTBSEntity_createComponents.call(this);
     this._miniHud = new Window_TBSEntityHud(this);
     BattleManagerTBS.getLayer("movableInfo").addChild(this._miniHud);
-    //LeUtilities.getScene().addEntityHud(this._miniHud);
 };
 
 Lecode.S_TBS.EntityHud.oldTBSEntity_update = TBSEntity.prototype.update;
