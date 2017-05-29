@@ -199,11 +199,3 @@ TBSTurnOrderVisual.prototype.updateOrderState = function () {
 		duration: 20
 	};
 };
-
-
-/*-------------------------------------------------------------------------
-* ImageManager
--------------------------------------------------------------------------*/
-ImageManager.loadLeTBSTurnOrder = function (filename, hue) {
-    return this.loadBitmap('img/leTBS/TurnOrder/', filename, hue, true);
-};

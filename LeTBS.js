@@ -4095,9 +4095,6 @@ BattleManagerTBS.getWalkableGridForEasyStar = function (cellsToIgnore) {
         var arr = [];
         for (var x = 0; x < $gameMap.width(); x++) {
             var cell = this.getCellAt(x, y);
-            if (this.isCellInScope(cell, cellsToIgnore)) {
-                arr.push(0);
-            } else if (cell) {
                 var entity = cell.getEntity();
                 if (entity) {
                     arr.push(entity.isPassable() ? 0 : 1);
