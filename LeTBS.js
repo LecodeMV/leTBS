@@ -88,7 +88,7 @@
 #         Defeat is now based on actors in battle and not the whole party (bugfix)
 #         Added a minimal parameter to scopes
 #         Scopes and AoEs parameters are now evaluated
-#         Added smooth map scrolling in battle
+#         Added smooth map scrolling system in battle
 #         Added a parameter to hide AI's scopes
 #         Counter attacks and magic reflection are now supported
 #         Added a summon system (add-on)
@@ -99,6 +99,7 @@
 #         Added some tag instructions to change sprite scale, tone and hue
 #         Added a tag "has_no_corpse" to hide an entity's corpse
 #         Added states and equipment animations in battle
+#         Added a map tactical and auto battle system
 #         The tag sprite_name is correctly taken into account into these components: Turn Order, Window Status
 #         The selected AoE now blinks
 #         Greatly improved targets and cells selection in sequences
@@ -108,18 +109,25 @@
 #         The AI uses smartly AoE skills to hit, heal or boost multiple targets
 #         The AI can use move skills to escape or reach targets
 #         The AI doesn't escape anymore if it's already too far from actors (prevents endless battles)
+#         The AI is able to focus its action on a specified target
 #         Added a parameter to define how much AI should try to escape (prevents endless battles)
 #         The AI now handles confusion states
-#         Added a parameter so delay AI calculation rate, in order to prevent freezes
+#         Added a parameter to delay AI calculation rate, in order to prevent freezes
 #         Added a configuration tag for AI
 #         Fixed a bug where collapse effects are triggered multiple times
-#         Projectiles are now summoned for each cell in the AoE
+#         Projectiles and entities are now summoned for each cell in the AoE
 #         The turn order is now correctly determined
 #         Command, Skill and Item windows are now correctly positioned
-#         Skills can now directly alter move points
-#         Move points popup is now added
+#         Skills can now directly alter move points with the instruction "change_move_points: +x /-x"
+#         Move points popup is now added - Though a little bugged
 #         Fixed a bug where triggering tiles and mark effects change the next
 #         action damage
+# - 0.7a : Fixed a bug where the "Free_LOS" command in event comments would not work
+#          Fixed a bug where the last summon data are used instead of a new data
+#          Sprites of summoned entities are destroyed
+# - 0.7b : The automatic call of the battle start is now correctly processed
+#          Fixed actors cannot be swaped
+#          The command, skill and item windows can't be off the screen
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -130,7 +138,7 @@ Lecode.S_TBS = {};
 /*:
  * @plugindesc A tactical battle system with awesome features
  * @author Lecode
- * @version 0.61
+ * @version 0.7b
 *
 *
 * @param Actor Color Cell
@@ -2126,6 +2134,8 @@ BattleManagerTBS.positioningSelect = function (cell) {
     cell.select();
     this.centerCell(cell);
     this.updateCursor();
+    if (cell._positioningData.fixed)
+        return;
     if (this._currentPositioningEntity) {
         var actorId = this._currentPositioningEntity.battler().actorId();
         if (this._positioningEntityToSwap) {
@@ -2243,6 +2253,7 @@ BattleManagerTBS.positioningPhaseOk = function () {
     var currentEntity = this.getEntityWithActorId(actorId);
     if (!currentEntity)
         this._battlerEntities.push(this._currentPositioningEntity);
+    cell = this._currentPositioningEntity.getCell();
     this.callDirectionSelector(this._currentPositioningEntity, cell);
     LeUtilities.getScene()._windowPositioningConfirm.setEnabled(true);
     LeUtilities.getScene()._windowPositioningConfirm.refresh();
@@ -2308,7 +2319,10 @@ BattleManagerTBS.directionSelectorValidatePositioning = function () {
     this._currentPositioningEntity = null;
     LeUtilities.getScene().activatePositioningWindow();
     this.cursor().hide();
-    if (this.allyEntities().length === $gameParty.battleMembers().length) {
+    var nbrFixedActors = this.allyStartCells().filter(function(cell){
+        return cell._positioningData.fixed != null;
+    }).length;
+    if (this.allyEntities().length === (nbrFixedActors+$gameParty.members().length)) {
         LeUtilities.getScene()._windowPositioning.deactivate();
         LeUtilities.getScene()._windowPositioning.deselect();
         this.positioningPhaseEnd();
@@ -4095,6 +4109,9 @@ BattleManagerTBS.getWalkableGridForEasyStar = function (cellsToIgnore) {
         var arr = [];
         for (var x = 0; x < $gameMap.width(); x++) {
             var cell = this.getCellAt(x, y);
+            if (this.isCellInScope(cell, cellsToIgnore)) {
+                arr.push(0);
+            } else if (cell) {
                 var entity = cell.getEntity();
                 if (entity) {
                     arr.push(entity.isPassable() ? 0 : 1);
@@ -5946,7 +5963,7 @@ TBSSequenceManager.prototype.parseSequence = function (id) {
     if (id.match(/\((.+)\)/i)) {
         var args = RegExp.$1.split(",");
         id = id.replace(/\(.+\)/i, "");
-        var sequence = Lecode.S_TBS.Config.Sequences[id];
+        var sequence = Lecode.S_TBS.Config.Sequences[id].slice();
         for (var i = 0; i < sequence.length; i++) {
             var line = sequence[i];
             for (var j = 0; j < args.length; j++) {
@@ -7317,7 +7334,7 @@ TBSEntity.prototype.changeSpeed = function (speed) {
 };
 
 TBSEntity.prototype.destroy = function () {
-    //this._layer.removeChild(this._sprite);
+    this._layer.removeChild(this._sprite);
 };
 
 TBSEntity.prototype.startSequence = function (id, action) {
@@ -8759,7 +8776,7 @@ TBSEvent.prototype.setupFlags = function () {
             if (comment.match(/<LeTBS>\s?Trigger_Type\s?:\s?(.+)/i))
                 this._triggerType = String(RegExp.$1).toLowerCase();
             if (comment.match(/<LeTBS>\s?Free_LOS/i))
-                this._obstacleForLOS = true;
+                this._obstacleForLOS = false;
             if (comment.match(/<LeTBS>\s?Stop_On_Step/i))
                 this._stopWhenStepped = true;
             if (comment.match(/<LeTBS>\s?Tile_Effect\s?:\s?(.+)/i))
