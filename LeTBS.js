@@ -128,6 +128,7 @@
 # - 0.7b : The automatic call of the battle start is now correctly processed
 #          Fixed actors cannot be swaped
 #          The command, skill and item windows can't be off the screen
+
 #=============================================================================
 */
 var Imported = Imported || {};
