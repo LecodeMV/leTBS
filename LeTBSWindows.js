@@ -14,6 +14,7 @@
 # - 1.0 : Initial release
 # - 1.1 : The tag sprite_name is correctly taken into account
 # - 1.2 : The status window is updated
+# - 1.3 : The command, skill and item windows can't be off the screen
 #=============================================================================
 */
 var Lecode = Lecode || {};
@@ -92,8 +93,8 @@ Window_TBSPositioning.prototype.initialize = function () {
     this.loadFaces();
 };
 
-Window_TBSPositioning.prototype.loadFaces = function() {
-    $gameParty.members().forEach(function(actor) {
+Window_TBSPositioning.prototype.loadFaces = function () {
+    $gameParty.members().forEach(function (actor) {
         ImageManager.loadFace(actor.faceName());
     });
 };
@@ -123,7 +124,7 @@ Window_TBSPositioning.prototype.visibleItems = function () {
 };
 
 Window_TBSPositioning.prototype.maxCols = function () {
-    return 1;//$gameParty.members().length;//this.visibleItems();
+    return 1;
 };
 
 Window_TBSPositioning.prototype.maxItems = function () {
@@ -152,7 +153,7 @@ Window_TBSPositioning.prototype.enableSelection = function () {
 
 Window_TBSPositioning.prototype.setFixedActor = function (actor) {
     var i = 0;
-    $gameParty.members().forEach(function(member){
+    $gameParty.members().forEach(function (member) {
         if (member.actorId() === actor.actorId()) {
             this._disabled[i] = true;
             this._fixedIndexes.push(i);
@@ -161,11 +162,11 @@ Window_TBSPositioning.prototype.setFixedActor = function (actor) {
     }.bind(this));
 };
 
-Window_TBSPositioning.prototype.isEnabled = function(index) {
+Window_TBSPositioning.prototype.isEnabled = function (index) {
     return !this._fixedIndexes.contains(index);
 };
 
-Window_TBSPositioning.prototype.isCurrentItemEnabled = function() {
+Window_TBSPositioning.prototype.isCurrentItemEnabled = function () {
     return this.isEnabled(this.index());
 };
 
@@ -188,7 +189,7 @@ Window_TBSPositioning.prototype.drawItem = function (index) {
     this.drawActorIcons(actor, x, y, Window_Base._iconWidth * 5);
 };
 
-Window_TBSPositioning.prototype.drawFace = function(faceName, faceIndex, x, y, width, height) {
+Window_TBSPositioning.prototype.drawFace = function (faceName, faceIndex, x, y, width, height) {
     width = width || Window_Base._faceWidth;
     height = height || Window_Base._faceHeight;
     var bitmap = ImageManager.loadFace(faceName);
@@ -224,7 +225,7 @@ Window_TBSPositioning.prototype.cursorUp = function (wrap) {
         this.callHandler("exit_up");
 };
 
-Window_TBSPositioning.prototype.processOk = function() {
+Window_TBSPositioning.prototype.processOk = function () {
     this._lastIndex = this.index();
     Window_Selectable.prototype.processOk.call(this);
 };
@@ -248,7 +249,7 @@ Window_TBSPositioningConfirm.prototype.setEnabled = function (bool) {
 };
 
 Window_TBSPositioningConfirm.prototype.makeCommandList = function () {
-    this.addCommand(this.text(), 'ok', this._enabled );
+    this.addCommand(this.text(), 'ok', this._enabled);
 };
 
 Window_TBSPositioningConfirm.prototype.text = function () {
@@ -281,7 +282,7 @@ Window_TBSPositioningConfirm.prototype.cursorDown = function (wrap) {
     this.callHandler("cursor_down");
 };
 
-Window_TBSPositioningConfirm.prototype.isCursorMovable = function() {
+Window_TBSPositioningConfirm.prototype.isCursorMovable = function () {
     return this.active;
 };
 
@@ -385,7 +386,7 @@ Window_TBSStatus.prototype.windowHeight = function () {
     return eval(Lecode.S_TBS.Windows.statusWindowH);
 };
 
-Window_TBSStatus.prototype.slide  = function () {
+Window_TBSStatus.prototype.slide = function () {
     this._sliding = true;
     this.x = -this.width;
 };
@@ -547,11 +548,17 @@ Window_TBSCommand.prototype.setup = function (actor, entity) {
 
 Window_TBSCommand.prototype.update = function () {
     Window_Command.prototype.update.call(this);
-    if(this._entity) {
+    if (this._entity) {
         var x = this._entity._posX - this.windowWidth() / 2;
         var y = this._entity._posY - this.windowHeight();
         this.x = x + this._entity.width() / 2;
         this.y = y;
+        if (this.y < 0)
+            this.y += this.windowHeight();
+        while (this.x < 0)
+            this.x++;
+        while ((this.x + this.width) > Graphics.width)
+            this.x--;
     }
 };
 
@@ -624,11 +631,17 @@ Window_TBSSkillList.prototype.maxCols = function () {
 
 Window_TBSSkillList.prototype.update = function () {
     Window_BattleSkill.prototype.update.call(this);
-    if(this._entity) {
+    if (this._entity) {
         var x = this._entity._posX - this.windowWidth() / 2;
         var y = this._entity._posY - this.windowHeight();
         this.x = x + this._entity.width() / 2;
         this.y = y;
+        if (this.y < 0)
+            this.y += this.windowHeight();
+        while (this.x < 0)
+            this.x++;
+        while ((this.x + this.width) > Graphics.width)
+            this.x--;
     }
 };
 
@@ -664,11 +677,17 @@ Window_TBSItemList.prototype.maxCols = function () {
 
 Window_TBSItemList.prototype.update = function () {
     Window_ItemList.prototype.update.call(this);
-    if(this._entity) {
+    if (this._entity) {
         var x = this._entity._posX - this.windowWidth() / 2;
         var y = this._entity._posY - this.windowHeight();
         this.x = x + this._entity.width() / 2;
         this.y = y;
+        if (this.y < 0)
+            this.y += this.windowHeight();
+        while (this.x < 0)
+            this.x++;
+        while ((this.x + this.width) > Graphics.width)
+            this.x--;
     }
 };
 

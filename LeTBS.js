@@ -125,6 +125,10 @@
 # - 0.7a : Fixed a bug where the "Free_LOS" command in event comments would not work
 #          Fixed a bug where the last summon data are used instead of a new data
 #          Sprites of summoned entities are destroyed
+# - 0.7b : The automatic call of the battle start is now correctly processed
+#          Fixed actors cannot be swaped
+#          The command, skill and item windows can't be off the screen
+
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -135,7 +139,7 @@ Lecode.S_TBS = {};
 /*:
  * @plugindesc A tactical battle system with awesome features
  * @author Lecode
- * @version 0.61
+ * @version 0.7b
 *
 *
 * @param Actor Color Cell
@@ -2131,6 +2135,8 @@ BattleManagerTBS.positioningSelect = function (cell) {
     cell.select();
     this.centerCell(cell);
     this.updateCursor();
+    if (cell._positioningData.fixed)
+        return;
     if (this._currentPositioningEntity) {
         var actorId = this._currentPositioningEntity.battler().actorId();
         if (this._positioningEntityToSwap) {
@@ -2248,6 +2254,7 @@ BattleManagerTBS.positioningPhaseOk = function () {
     var currentEntity = this.getEntityWithActorId(actorId);
     if (!currentEntity)
         this._battlerEntities.push(this._currentPositioningEntity);
+    cell = this._currentPositioningEntity.getCell();
     this.callDirectionSelector(this._currentPositioningEntity, cell);
     LeUtilities.getScene()._windowPositioningConfirm.setEnabled(true);
     LeUtilities.getScene()._windowPositioningConfirm.refresh();
@@ -2313,7 +2320,10 @@ BattleManagerTBS.directionSelectorValidatePositioning = function () {
     this._currentPositioningEntity = null;
     LeUtilities.getScene().activatePositioningWindow();
     this.cursor().hide();
-    if (this.allyEntities().length === $gameParty.battleMembers().length) {
+    var nbrFixedActors = this.allyStartCells().filter(function(cell){
+        return cell._positioningData.fixed != null;
+    }).length;
+    if (this.allyEntities().length === (nbrFixedActors+$gameParty.members().length)) {
         LeUtilities.getScene()._windowPositioning.deactivate();
         LeUtilities.getScene()._windowPositioning.deselect();
         this.positioningPhaseEnd();
