@@ -128,7 +128,10 @@
 # - 0.7b : The automatic call of the battle start is now correctly processed
 #          Fixed actors cannot be swaped
 #          The command, skill and item windows can't be off the screen
-
+# - 0.7c : Fixed a bug where deleted events could make the game crash
+#          The battle window layer isn't affected by the screen filters anymore
+#          Victory branches are now correctly supported
+#          The command window stay closed at the battle end
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -139,7 +142,7 @@ Lecode.S_TBS = {};
 /*:
  * @plugindesc A tactical battle system with awesome features
  * @author Lecode
- * @version 0.7b
+ * @version 0.7c
 *
 *
 * @param Actor Color Cell
@@ -623,11 +626,11 @@ Spriteset_BattleTBS.prototype.createBattleLayers = function () {
     //-Movable Info
     this._movableInfoLayer = new Sprite();
     this._movableInfoLayer.z = 6;
-    this._tbsLayer.addChild(this._movableInfoLayer);
+    this.addChild(this._movableInfoLayer);
     //-Fixed Info
     this._fixedInfoLayer = new Sprite();
     this._fixedInfoLayer.z = 6;
-    this._baseSprite.addChild(this._fixedInfoLayer);
+    this.addChild(this._fixedInfoLayer);
     //-Debug
     var bitmap = new Bitmap(Graphics.width, Graphics.height);
     this._debugLayer = new Sprite(bitmap);
@@ -645,6 +648,9 @@ Spriteset_BattleTBS.prototype.updateTilemap = function () {
     if (!this._tbsLayer) return;
     this._tbsLayer.x = -$gameMap.displayX() * $gameMap.tileWidth();
     this._tbsLayer.y = -$gameMap.displayY() * $gameMap.tileHeight();
+    if (!this._movableInfoLayer) return;
+    this._movableInfoLayer.x = -$gameMap.displayX() * $gameMap.tileWidth();
+    this._movableInfoLayer.y = -$gameMap.displayY() * $gameMap.tileHeight();
 };
 
 Spriteset_BattleTBS.prototype.updateEntitiesZ = function () {
@@ -927,6 +933,7 @@ Lecode.S_TBS.oldSB_update = Scene_Battle.prototype.update;
 Scene_Battle.prototype.update = function () {
     if (Lecode.S_TBS.commandOn) {
         $gameMap.update(true);
+        $gameTroop.updateInterpreter();
         $gameTimer.update(true);
         $gameScreen.update();
         InputHandlerTBS.update();
@@ -1537,7 +1544,6 @@ BattleManagerTBS.initMembers = function () {
     this._turnOrder = [];
     this._activeIndex = 0;
     this._activeAction = null;
-    this._dummyChara = new Game_Character();
     this._moveScope = null;
     this._movePath = null;
     this._actionScope = null;
@@ -1554,10 +1560,6 @@ BattleManagerTBS.allEntities = function () {
 
 BattleManagerTBS.allPlayableEntities = function () {
     return this._battlerEntities;
-};
-
-BattleManagerTBS.dummyCharacter = function () {
-    return this._dummyChara;
 };
 
 BattleManagerTBS.moveScope = function () {
@@ -1737,6 +1739,7 @@ BattleManagerTBS.createNeutralEntities = function () {
 
 BattleManagerTBS.prepareEntityFlags = function () {
     $gameMap.events().forEach(function (event) {
+        if(!event) return;
         for (var i = 0; i < event.list().length; i++) {
             var command = event.list()[i];
             if (command && command.code == 108) {
@@ -1755,8 +1758,8 @@ BattleManagerTBS.prepareEntityFlags = function () {
 
 BattleManagerTBS.update = function () {
     this.updateWait();
-    this.waitForMessages();
-    this.waitForEvents();
+    this.waitMessagesForCommandWindow();
+    this.waitEventsForCommandWindow();
     this.updateWindowsInputOpacity();
     this.updateTBSObjects();
     this.updatePhase();
@@ -1777,8 +1780,8 @@ BattleManagerTBS.resetDestinationCount = function () {
     this._destinationCount = 0;
 };
 
-BattleManagerTBS.waitForMessages = function () {
-    if ($gameMessage.isBusy()) {
+BattleManagerTBS.waitMessagesForCommandWindow = function () {
+    if ($gameMessage.isBusy() && !this._windowToResume) {
         this.wait(1);
         var window = LeUtilities.getScene()._windowCommand;
         if (window.active) {
@@ -1787,7 +1790,7 @@ BattleManagerTBS.waitForMessages = function () {
             this._windowToResume = window;
         }
     } else {
-        if (this._windowToResume) {
+        if (this._windowToResume && this._phase !== "battle_end") {
             this._windowToResume.open();
             this._windowToResume.activate();
             this._windowToResume = null;
@@ -1795,8 +1798,8 @@ BattleManagerTBS.waitForMessages = function () {
     }
 };
 
-BattleManagerTBS.waitForEvents = function () {
-    if ($gameMap.isEventRunning()) {
+BattleManagerTBS.waitEventsForCommandWindow = function () {
+    if ($gameTroop.isEventRunning() && !this._windowToResume) {
         var window = LeUtilities.getScene()._windowCommand;
         if (window.active) {
             window.close();
@@ -1804,7 +1807,7 @@ BattleManagerTBS.waitForEvents = function () {
             this._windowToResume = window;
         }
     } else {
-        if (this._windowToResume) {
+        if (this._windowToResume && this._phase !== "battle_end") {
             this._windowToResume.open();
             this._windowToResume.activate();
             this._windowToResume = null;
@@ -3310,7 +3313,7 @@ BattleManagerTBS.updateEndOfTurnEvents = function () {
 BattleManagerTBS.updateEvents = function () {
     $gameTroop.updateInterpreter();
     $gameParty.requestMotionRefresh();
-    if ($gameTroop.isEventRunning() || $gameMap.isEventRunning()) {
+    if ($gameTroop.isEventRunning()) {
         return true;
     }
     $gameTroop.setupBattleEvent();
@@ -4255,6 +4258,7 @@ BattleManagerTBS.executeEventsByTouch = function (entity) {
         var event = this.getTBSEventAt(cell.x, cell.y);
         if (event && event.canTriggerByTouch()) {
             event.start();
+            console.log("event:" ,event);
             this._lastTriggeredEventEntity = entity;
             this._lastTriggeredEventBattler = entity.battler();
         }
@@ -9585,6 +9589,52 @@ Game_Map.prototype.isPassable = function (x, y, d) {
             return false;
     }
     return result;
+};
+
+Lecode.S_TBS.oldGameMap_updateInterpreter = Game_Map.prototype.updateInterpreter;
+Game_Map.prototype.updateInterpreter = function() {
+    if (LeUtilities.isScene("Scene_Battle") && Lecode.S_TBS.commandOn)
+        return;
+    Lecode.S_TBS.oldGameMap_updateInterpreter.call(this);
+};
+
+
+/*-------------------------------------------------------------------------
+* Game_Troop
+-------------------------------------------------------------------------*/
+Lecode.S_TBS.oldGameTroop_updateInterpreter = Game_Troop.prototype.updateInterpreter;
+Game_Troop.prototype.updateInterpreter = function() {
+    if (!Lecode.S_TBS.commandOn) {
+        Lecode.S_TBS.oldGameTroop_updateInterpreter.call(this);
+        return;
+    }
+    this._interpreter.update();
+    this.setupStartingMapEvent();
+    /*for (;;) {
+        this._interpreter.update();
+        if (this._interpreter.isRunning()) {
+            return;
+        }
+        if (this._interpreter.eventId() > 0) {
+            this._interpreter.clear();
+        }
+        if (!this.setupStartingMapEvent()) {
+            return;
+        }
+    }*/
+};
+
+Game_Troop.prototype.setupStartingMapEvent = function() {
+    var events = $gameMap.events();
+    for (var i = 0; i < events.length; i++) {
+        var event = events[i];
+        if (event.isStarting()) {
+            event.clearStartingFlag();
+            this._interpreter.setup(event.list(), event.eventId());
+            return true;
+        }
+    }
+    return false;
 };
 
 
