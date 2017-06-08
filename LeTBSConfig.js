@@ -417,7 +417,23 @@ Lecode.S_TBS.Config.Sequences = {
         //"perform_collapse: user"
     ],
 
+    "dead_no_loop": [
+        "anim: user, collapse_anim",
+        "play_pose: user, dead",
+        "set_frame: user, dead, last",
+        "wait: 40"
+    ],
+
+    "dead_vanish": [
+        "play_pose: user, dead",
+        "anim: user, collapse_anim",
+        "set_frame: user, dead, last",
+        "wait: 20",
+        "sprite_prop: user, opacity, 0"
+    ],
+
     "revived": [
+        "sprite_prop: user, opacity, 255",
         "play_pose: user, idle, idle",
     ],
 
@@ -807,7 +823,7 @@ Lecode.S_TBS.Config.Sequences = {
 
     "shamanism": [
         "call: pre-skill",
-        "anim: {aoe}_battlers, obj_anim",
+        "anim: {aoe}_dead_battlers, obj_anim",
         "wait: 20",
         "call_for_every_entity: shamanism_effects, {aoe}_dead_battlers",
         "call: post-skill"
