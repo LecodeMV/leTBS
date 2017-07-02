@@ -47,23 +47,45 @@ if (Lecode.S_TBS.Commands.previewActionScopes) {
 
     Lecode.S_TBS.AutoSelection.oldBattleManagerTBS_processCommandCallSkill = BattleManagerTBS.processCommandCallSkill;
     BattleManagerTBS.processCommandCallSkill = function (id) {
-        Lecode.S_TBS.AutoSelection.oldBattleManagerTBS_processCommandCallSkill.call(this,id);
+        Lecode.S_TBS.AutoSelection.oldBattleManagerTBS_processCommandCallSkill.call(this, id);
         var skill = $dataSkills[id];
         this.processAutoSelection(skill, this._actionScope.cells);
     };
 
 }
 
+Lecode.S_TBS.AutoSelection.oldBattleManagerTBS_processCommandAttack = BattleManagerTBS.processCommandAttack;
+BattleManagerTBS.processCommandAttack = function () {
+    Lecode.S_TBS.AutoSelection.oldBattleManagerTBS_processCommandAttack.call(this);
+    var scope = this._actionScope.cells.filter(function (cell) {
+        return cell._scopeVisible;
+    });
+    var entities = this.getEntitiesInScope(scope);
+    var enemies = entities.filter(function (entity) {
+        return entity.battler().isEnemy() && !entity.battler().isDead();
+    });
+    var target;
+    if (enemies.length > 0) {
+        target = enemies.sort(function (a, b) {
+            return a.battler().hpRate() - b.battler().hpRate();
+        })[0];
+    }
+
+    if (target) {
+        this.setCursorCell(target.getCell());
+    }
+};
+
 BattleManagerTBS.processAutoSelection = function (item, scope) {
-    scope = scope.filter(function(cell){
+    scope = scope.filter(function (cell) {
         return cell._scopeVisible;
     });
     var entities = this.getEntitiesInScope(scope);
     var actors = entities.filter(function (entity) {
-        return entity.battler().isActor();
+        return entity.battler().isActor() && !entity.battler().isDead();
     });
     var enemies = entities.filter(function (entity) {
-        return entity.battler().isEnemy();
+        return entity.battler().isEnemy() && !entity.battler().isDead();
     });
     var target;
     if ([1, 2, 3, 4, 5, 6].indexOf(item.scope) >= 0 && enemies.length > 0) {

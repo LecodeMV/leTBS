@@ -77,9 +77,6 @@ Lecode.S_TBS.Commands.previewMoveScope = String(parameters["Preview Move Scope"]
 Lecode.S_TBS.Commands.previewActionScopes = String(parameters["Preview Action Scopes"] || 'true') === 'true';	//	(): Show skills and items scopes when the command window is open ?
 
 
-
-
-
 /*-------------------------------------------------------------------------
 * TBSEntity
 -------------------------------------------------------------------------*/
@@ -285,6 +282,7 @@ Window_TBSCommand.prototype.callUpdateHelp = function () {
 };
 
 Window_TBSCommand.prototype.updateHelp = function () {
+    if (!this._list[0]) return;
     var symbol = this.commandSymbol(this.index());
     if (BattleManagerTBS._spriteset) {
         BattleManagerTBS.getLayer("scopes").clear();
@@ -297,10 +295,8 @@ Window_TBSCommand.prototype.updateHelp = function () {
         BattleManagerTBS.previewObjectScope(this._entity, $dataSkills[Number(RegExp.$1)], "skill");
     else if (symbol === "attack" && Lecode.S_TBS.Commands.previewActionScopes)
         BattleManagerTBS.previewObjectScope(this._entity, null, "attack");
-    else if (symbol === "move" && Lecode.S_TBS.Commands.previewMoveScope) {
+    else if (symbol === "move" && Lecode.S_TBS.Commands.previewMoveScope)
         BattleManagerTBS.drawMoveScope(this._entity);
-        console.log("DRAW");
-    }
 };
 
 

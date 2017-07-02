@@ -139,6 +139,7 @@
 #          Entities can now stay on a corpse if it's opacity is 0
 #          Added the sequence command "sprite_prop"
 # - 0.75 : Added 7 new features to control the timeline (add-on)
+#          Added charged skills
 #          Improved the turn order visual
 #          Added dynamic turn order numbers
 #          The command window is now customizable
@@ -151,6 +152,8 @@
 #          Using TouchInput to select starting cells won't throw an error anymore
 #          The status windows doesn't show on a dead entity who has no corpse
 #          Scopes with the min parameter are now properly drawn at map corners
+#          Auto status sprites are now correctly setup
+#          The ground is now correctly layered
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -629,7 +632,7 @@ Spriteset_BattleTBS.prototype.createBattleLayers = function () {
     //-Ground entities
     this._groundEntitiesLayer = new Sprite();
     this._groundEntitiesLayer.z = 1;
-    this._tbsLayer.addChild(this._groundEntitiesLayer);
+    this._tilemap.addChild(this._groundEntitiesLayer);
     //-Ground
     this._groundLayer = new Sprite();
     this._groundLayer.z = 2;
@@ -669,7 +672,7 @@ Spriteset_BattleTBS.prototype.update = function () {
 Spriteset_BattleTBS.prototype.updateTilemap = function () {
     Spriteset_Map.prototype.updateTilemap.call(this);
     [this._tbsLayer, this._movableInfoLayer, this._movableWindowsLayer, this._battlersLayer,
-    this._scopesLayer].forEach(function (layer) {
+    this._scopesLayer, this._groundEntitiesLayer].forEach(function (layer) {
         if (layer) {
             layer.x = -$gameMap.displayX() * $gameMap.tileWidth();
             layer.y = -$gameMap.displayY() * $gameMap.tileHeight();
@@ -2464,7 +2467,6 @@ BattleManagerTBS.processBattle = function () {
 };
 
 BattleManagerTBS.battlePhaseOnTouchInput = function (selectedCell) {
-    console.log("selectedCell:" ,selectedCell);
     switch (this._subPhase) {
         case "move":
             this.touchMoveSelection(selectedCell);

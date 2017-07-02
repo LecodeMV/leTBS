@@ -97,7 +97,7 @@ Lecode.S_TBS.TurnOrderVisual = {};
 /*-------------------------------------------------------------------------
 * Get Parameters
 -------------------------------------------------------------------------*/
-var parameters = PluginManager.parameters('LeTBS');
+var parameters = PluginManager.parameters('LeTBSTurnOrderA');
 
 Lecode.S_TBS.TurnOrderVisual.visible = String(parameters["Visible"] || 'true') === 'true';
 // Divider: -- HUD --
@@ -392,7 +392,7 @@ Window_TBSEntityTurn.prototype.updatePosition = function () {
 
 Window_TBSEntityTurn.prototype.refresh = function (index) {
 	this.refreshText(index);
-	this._windowContentsSprite.leU_startFlash(Lecode.S_TBS.TurnOrderVisual.numbersFlash, 20);
+	this._windowContentsSprite.leU_startFlash(eval(Lecode.S_TBS.TurnOrderVisual.numbersFlash), 20);
 };
 
 Window_TBSEntityTurn.prototype.refreshText = function (index) {
