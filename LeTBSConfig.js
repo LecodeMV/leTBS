@@ -17,6 +17,7 @@ Lecode.S_TBS.Config.Battler_Sprites = {
         ["idle", "_idle", 1],
         ["move", "_move", 4],
         ["cast", "_cast", 1],
+        ["charge", "_cast", 1],
         ["atk", "_atk", 4],
         ["hit", "_hit", 1],
         ["dead", "_dead", 1],
@@ -907,7 +908,7 @@ Lecode.S_TBS.Config.Sequences = {
         "wait: 5",
         "end_delegated_call:",
         "delegate_call: rush_sup_action, last_targets"
-    ],
+    ]
     
 
 };

@@ -3,7 +3,7 @@
 # Lecode's Tactical Battle System
 # LeTBS.js
 # By Lecode
-# Version 0.7d
+# Version 0.75
 #-----------------------------------------------------------------------------
 # TERMS OF USE
 #-----------------------------------------------------------------------------
@@ -21,7 +21,7 @@
 # - 0.2 : The Item command is functional.
 #		  Added custom move scopes and options.
 #		  Downgraded the turn order visual for now to fix some bugs.
-#		  Added a new option for turn order: "fair repartition".
+#		  Added a new option for turn order: "fair Distribution".
 #		  Status window is updated when a target is selected.
 #		  There's now a help window. Status window is shifted if needed.
 # - 0.3 : The mouse is supported.
@@ -138,6 +138,19 @@
 #          Added sequence overloading
 #          Entities can now stay on a corpse if it's opacity is 0
 #          Added the sequence command "sprite_prop"
+# - 0.75 : Added 7 new features to control the timeline (add-on)
+#          Improved the turn order visual
+#          Added dynamic turn order numbers
+#          The command window is now customizable
+#          Scopes can now be previewed
+#          Added a auto-selection system
+#          Added a skill bubble system
+#          Added some parameters to most add-ons
+#          Cannot place more actors than available spots
+#          Fixed the "Cannot read Property `list` of undefined" error
+#          Using TouchInput to select starting cells won't throw an error anymore
+#          The status windows doesn't show on a dead entity who has no corpse
+#          Scopes with the min parameter are now properly drawn at map corners
 #=============================================================================
 */
 var Imported = Imported || {};
@@ -148,7 +161,7 @@ Lecode.S_TBS = {};
 /*:
  * @plugindesc A tactical battle system with awesome features
  * @author Lecode
- * @version 0.7d
+ * @version 0.75
 *
 * @param Actor Color Cell
 * @desc Color of actor cells.
@@ -198,8 +211,8 @@ Lecode.S_TBS = {};
 * @desc Duration of the battle start sprite.
 * @default 50
 *
-* @param Turn Order Fair Repartition ?
-* @desc Allow a fair repartition of the turn order ?
+* @param Turn Order Fair Distribution ?
+* @desc Allow a fair Distribution of the turn order ?
 * @default true
 *
 * @param Destination Duration
@@ -498,7 +511,7 @@ Lecode.S_TBS.opacityInput = String(parameters["Opacity Input"] || "control");	//
 Lecode.S_TBS.minInputOpacity = Number(parameters["Min Input Opacity"] || 0);	//	(): Minimum opacity of windows.
 Lecode.S_TBS.inputOpacityDecreaseSteps = Number(parameters["Opacity Steps"] || 10);	//	(Opacity Steps): Value of opacity to reduce when inputed.
 Lecode.S_TBS.battleStartSpriteDelay = Number(parameters["Battle Start Sprite Delay"] || 50);	//	(): Duration of the battle start sprite.
-Lecode.S_TBS.turnOrderFairRepartition = String(parameters["Turn Order Fair Repartition ?"] || 'true') === 'true';	//	(Turn Order Fair Repartition ?): Allow a fair repartition of the turn order ?
+Lecode.S_TBS.turnOrderFairDistribution = String(parameters["Turn Order Fair Distribution ?"] || 'true') === 'true';	//	(Turn Order Fair Distribution ?): Allow a fair Distribution of the turn order ?
 Lecode.S_TBS.destinationDuration = Number(parameters["Destination Duration"] || 60);	//	(): Duration of the destination sprite (when a cell is selected).
 // Divider: -- Scopes --
 Lecode.S_TBS.scopeCellWidth = Number(parameters["Scope Cell Width"] || 46);	//	(): Width of cells.
@@ -545,7 +558,7 @@ Lecode.S_TBS.ItemSelectedCellOpacity = Number(parameters["Selected Item Scope Op
 // Divider: -- Directional Damage --
 Lecode.S_TBS.backDirectionalDamageEffects = Number(parameters["Back Directional Damage Effects"] || 15);	//	(): Damage % when a battler is hit on the back.
 Lecode.S_TBS.sideDirectionalDamageEffects = Number(parameters["Side Directional Damage Effects"] || 0);	//	(): Damage % when a battler is hit on the sides.
-Lecode.S_TBS.faceDirectionalDamageEffects = Number(parameters["Face Directional Damage Effects"] || -10);	//	(): Damage % when a battler is hit on the face.
+Lecode.S_TBS.frontDirectionalDamageEffects = Number(parameters["Face Directional Damage Effects"] || -10);	//	(): Damage % when a battler is hit on the face.
 // Divider: -- Collision Damage --
 Lecode.S_TBS.defaultCollisionFormula = String(parameters["Default Collision Formula"] || "b.mhp * 0.05 * (distance-covered)");	//	(): Formula to evaluate collision damage.
 Lecode.S_TBS.collissionDamageChainRate = Number(parameters["Collission Damage Chain Rate"] || 0.3);	//	(): Collision damage chain rate.
@@ -633,6 +646,10 @@ Spriteset_BattleTBS.prototype.createBattleLayers = function () {
     this._movableInfoLayer = new Sprite();
     this._movableInfoLayer.z = 6;
     this.addChild(this._movableInfoLayer);
+    //-Movable Windows
+    this._movableWindowsLayer = new Sprite();
+    this._movableWindowsLayer.z = 6;
+    this.addChild(this._movableWindowsLayer);
     //-Fixed Info
     this._fixedInfoLayer = new Sprite();
     this._fixedInfoLayer.z = 6;
@@ -651,7 +668,7 @@ Spriteset_BattleTBS.prototype.update = function () {
 
 Spriteset_BattleTBS.prototype.updateTilemap = function () {
     Spriteset_Map.prototype.updateTilemap.call(this);
-    [this._tbsLayer, this._movableInfoLayer, this._battlersLayer,
+    [this._tbsLayer, this._movableInfoLayer, this._movableWindowsLayer, this._battlersLayer,
     this._scopesLayer].forEach(function (layer) {
         if (layer) {
             layer.x = -$gameMap.displayX() * $gameMap.tileWidth();
@@ -790,6 +807,12 @@ TBSMapAnimation.prototype.startAnimation = function (animation, mirror, delay) {
     sprite.setup(this._target || this._effectTarget, animation, mirror, delay, this._cell);
     this.addChild(sprite);
     this._animationSprites.push(sprite);
+};
+
+TBSMapAnimation.prototype.isAnimationPlaying = function () {
+    return this._animationSprites.filter(function (sprite) {
+        return !sprite._isLoopAnim;
+    }).length > 0;
 };
 
 
@@ -980,9 +1003,9 @@ Scene_Battle.prototype.createAllWindows = function () {
 };
 
 Scene_Battle.prototype.setMovableWindows = function () {
-    BattleManagerTBS.getLayer("movableInfo").addChild(this._windowCommand);
-    BattleManagerTBS.getLayer("movableInfo").addChild(this._windowSkill);
-    BattleManagerTBS.getLayer("movableInfo").addChild(this._windowItem);
+    BattleManagerTBS.getLayer("movableWindows").addChild(this._windowCommand);
+    BattleManagerTBS.getLayer("movableWindows").addChild(this._windowSkill);
+    BattleManagerTBS.getLayer("movableWindows").addChild(this._windowItem);
 };
 
 Scene_Battle.prototype.createPositioningWindow = function () {
@@ -1040,11 +1063,6 @@ Lecode.S_TBS.oldSB_createCommandWindow = Scene_Battle.prototype.createCommandWin
 Scene_Battle.prototype.createCommandWindow = function () {
     if (Lecode.S_TBS.commandOn) {
         this._windowCommand = new Window_TBSCommand();
-        this._windowCommand.setHandler('move', this.onCommandInput.bind(this, "move"));
-        this._windowCommand.setHandler('attack', this.onCommandInput.bind(this, "attack"));
-        this._windowCommand.setHandler('skill', this.onCommandInput.bind(this, "skill"));
-        this._windowCommand.setHandler('item', this.onCommandInput.bind(this, "item"));
-        this._windowCommand.setHandler('pass', this.onCommandInput.bind(this, "pass"));
         this._windowCommand.setHandler('cancel', this.onCommandInput.bind(this, "cancel"));
         this._windowCommand.hide();
         this._windowCommand.deactivate();
@@ -1168,6 +1186,7 @@ Scene_Battle.prototype.showPositioningWindow = function (cell, battler) {
 
 Scene_Battle.prototype.showStatusWindow = function (entity, slide) {
     if (entity.battler().rpgObject().leTbs_hideStatusWindow) return;
+    if (entity.battler().isDead() && entity.hasNoCorpse()) return;
     var window = this._windowStatus;
     this._windowStatus._entity = entity;
     this._windowStatus.show();
@@ -1742,16 +1761,17 @@ BattleManagerTBS.createNeutralEntities = function () {
 
 BattleManagerTBS.prepareEntityFlags = function () {
     $gameMap.events().forEach(function (event) {
-        if (!event) return;
-        for (var i = 0; i < event.list().length; i++) {
-            var command = event.list()[i];
-            if (command && command.code == 108) {
-                var comments = command.parameters;
-                for (var j = 0; j < comments.length; j++) {
-                    var comment = comments[j];
-                    if (comment.match(/<LeTBS>\s?Flag\s?:\s?(.+)/i)) {
-                        this._startupFlags[event.x] = {};
-                        this._startupFlags[event.x][event.y] = RegExp.$1;
+        if (event && !event._erased) {
+            for (var i = 0; i < event.list().length; i++) {
+                var command = event.list()[i];
+                if (command && command.code == 108) {
+                    var comments = command.parameters;
+                    for (var j = 0; j < comments.length; j++) {
+                        var comment = comments[j];
+                        if (comment.match(/<LeTBS>\s?Flag\s?:\s?(.+)/i)) {
+                            this._startupFlags[event.x] = {};
+                            this._startupFlags[event.x][event.y] = RegExp.$1;
+                        }
                     }
                 }
             }
@@ -2113,7 +2133,6 @@ BattleManagerTBS.waitForPositioningInput = function () {
     this._subPhase = "wait";
     this.selectNextStartCell();
     this.cursor().hide();
-    console.log("MOMENT");
     LeUtilities.getScene().showPositioningWindow();
     LeUtilities.getScene().activatePositioningWindow();
 };
@@ -2143,7 +2162,7 @@ BattleManagerTBS.positioningSelect = function (cell) {
     cell.select();
     this.centerCell(cell);
     this.updateCursor();
-    if (cell._positioningData.fixed)
+    if (cell._positioningData && cell._positioningData.fixed)
         return;
     if (this._currentPositioningEntity) {
         var actorId = this._currentPositioningEntity.battler().actorId();
@@ -2331,7 +2350,8 @@ BattleManagerTBS.directionSelectorValidatePositioning = function () {
     var nbrFixedActors = this.allyStartCells().filter(function (cell) {
         return cell._positioningData.fixed != null;
     }).length;
-    if (this.allyEntities().length === (nbrFixedActors + $gameParty.members().length)) {
+    if (this.allyEntities().length === (nbrFixedActors + $gameParty.members().length)
+        || this.allyEntities().length === this.allyStartCells().length) {
         LeUtilities.getScene()._windowPositioning.deactivate();
         LeUtilities.getScene()._windowPositioning.deselect();
         this.positioningPhaseEnd();
@@ -2444,6 +2464,7 @@ BattleManagerTBS.processBattle = function () {
 };
 
 BattleManagerTBS.battlePhaseOnTouchInput = function (selectedCell) {
+    console.log("selectedCell:" ,selectedCell);
     switch (this._subPhase) {
         case "move":
             this.touchMoveSelection(selectedCell);
@@ -2553,6 +2574,7 @@ BattleManagerTBS.battlePhaseOnInputUp = function () {
 
 BattleManagerTBS.updateBattleProcessing = function () {
     this.updateSequences();
+    if (this.isWaiting()) return;
     if (this._subPhase === "moving") {
         if (!this.activeEntity().isMoving() && !this.isWaiting())
             this.onActiveEntityMoveEnd();
@@ -2574,7 +2596,7 @@ BattleManagerTBS.hidePositioningCells = function () {
 };
 
 BattleManagerTBS.determineTurnOrder = function () {
-    if (Lecode.S_TBS.turnOrderFairRepartition)
+    if (Lecode.S_TBS.turnOrderFairDistribution)
         this.determineTurnOrderFair();
     else
         this.determineTurnOrderSimple();
@@ -2868,6 +2890,8 @@ BattleManagerTBS.validateMoveSelection = function () {
     SoundManager.playOk();
     this.activeEntity().processMovement(this.movePath());
     this._subPhase = "moving";
+    this.getLayer("scopes").clear();
+    this.clearMoveSelection();
 };
 
 BattleManagerTBS.touchMoveSelection = function (selectedCell) {
@@ -2880,8 +2904,6 @@ BattleManagerTBS.touchMoveSelection = function (selectedCell) {
 
 BattleManagerTBS.onActiveEntityMoveEnd = function () {
     this._subPhase = "";
-    this.getLayer("scopes").clear();
-    this.clearMoveSelection();
     this._moveScope = {};
 
     this.activeEntity()._movePerformed = true;
@@ -2979,11 +3001,11 @@ BattleManagerTBS.onSkillSelected = function () {
 BattleManagerTBS.makeSkillScope = function (entity, obj) {
     obj = obj || this.activeAction().item();
     var data = entity.getObjectScopeData(obj);
-    this.makeActionScope(entity, data);
+    this.makeActionScope(entity, data, obj);
 };
 
-BattleManagerTBS.drawSkillScope = function (entity) {
-    this.makeSkillScope(entity);
+BattleManagerTBS.drawSkillScope = function (entity, obj) {
+    this.makeSkillScope(entity, obj);
     this._actionScopeParam = {
         color: Lecode.S_TBS.skillColorCell,
         scolor: Lecode.S_TBS.selectedSkillColorCell,
@@ -3022,11 +3044,11 @@ BattleManagerTBS.onItemSelected = function () {
 BattleManagerTBS.makeItemScope = function (entity, obj) {
     obj = obj || this.activeAction().item();
     var data = entity.getObjectScopeData(obj);
-    this.makeActionScope(entity, data);
+    this.makeActionScope(entity, data, obj);
 };
 
-BattleManagerTBS.drawItemScope = function (entity) {
-    this.makeItemScope(entity);
+BattleManagerTBS.drawItemScope = function (entity, obj) {
+    this.makeItemScope(entity, obj);
     this._actionScopeParam = {
         color: Lecode.S_TBS.ItemColorCell,
         scolor: Lecode.S_TBS.selectedItemColorCell,
@@ -3080,13 +3102,20 @@ BattleManagerTBS.onActionCancel = function () {
     this.getLayer("scopes").clear();
     this.clearActionSelection();
     this._actionScope = {};
-
-    LeUtilities.getScene().showCommandWindow();
     var cell = this.activeEntity().getCell();
     this.setCursorCell(cell);
 
     Input.clear();
     SoundManager.playCancel();
+    
+    if (this._subPhase === "skill") {
+        this.processCommandSkill();
+    } else if (this._subPhase === "item") {
+        this.processCommandItem();
+    } else {
+        LeUtilities.getScene().showCommandWindow();
+    }
+
 };
 
 BattleManagerTBS.isActionScopeAvailable = function () {
@@ -3107,6 +3136,11 @@ BattleManagerTBS.processAction = function () {
         entity.startSequence(fastSequence, action);
     else
         entity.startSequence(id, action);
+};
+
+BattleManagerTBS.onPrimarySequenceEnd = function (seqMng) {
+    var entities = LeUtilities.uniqArray(seqMng._affectedTargets);
+    this.processCounterAttack(entities, seqMng.getUser(), seqMng._action);
 };
 
 BattleManagerTBS.processCounterAttack = function (targets, subject, action) {
@@ -3148,7 +3182,7 @@ BattleManagerTBS.applyObjEffects = function (user, targets, hitAnim, animDelay) 
                 target.callSequence("evaded");
             }
             target.applyObjChangeMovePoints(this.activeAction().item());
-            target.onDamage();
+            target.onDamage(user);
         }
     }.bind(this));
 };
@@ -3168,7 +3202,7 @@ BattleManagerTBS.processMagicReflection = function (user, target, hitAnim, animD
         user.callSequence("evaded");
     }
     user.applyObjChangeMovePoints(this.activeAction().item());
-    user.onDamage();
+    user.onDamage(target);
 };
 
 BattleManagerTBS.invokeObjEffectsOnMap = function (user, item, cellTargets, hitAnim, animDelay) {
@@ -3194,7 +3228,7 @@ BattleManagerTBS.applyObjEffectsOnMap = function (user, item, cellTargets, hitAn
                     target.callSequence("evaded");
                 }
                 target.applyObjChangeMovePoints(this.activeAction().item());
-                target.onDamage();
+                target.onDamage(user);
                 this.resetDirectionalDamageBonus([target]);
             }
         }
@@ -3217,7 +3251,7 @@ BattleManagerTBS.processMagicReflectionOnMap = function (user, target, hitAnim, 
         user.callSequence("evaded");
     }
     user.applyObjChangeMovePoints(this.activeAction().item());
-    user.onDamage();
+    user.onDamage(target);
     this.resetDirectionalDamageBonus([target]);
     if (hitAnim)
         this.getLayer("animations").newAnimation(hitAnim, false, animDelay, cell, sprite);
@@ -3673,7 +3707,6 @@ BattleManagerTBS.getScopeFromData = function (data, center, param, points) {
     if (this._requestSpecialSelection) {
         this._requestSpecialSelection.aoe = scope;
     }
-
     scope = this.applyParamToScope(scope, center, points, param);
     return scope;
 };
@@ -3716,7 +3749,7 @@ BattleManagerTBS.makeCircleScope = function (center, range, min, param) {
     if (min) {
         var minCells = this.makeCircleScope(center, min, null, param);
         cells = cells.filter(function (cell) {
-            return !this.isCellInScope(cell, minCells);
+            return cell && !this.isCellInScope(cell, minCells);
         }.bind(this));
     }
     return cells;
@@ -3736,7 +3769,7 @@ BattleManagerTBS.makeSquareScope = function (center, range, min, param) {
     if (min) {
         var minCells = this.makeSquareScope(center, min, null, param);
         cells = cells.filter(function (cell) {
-            return !this.isCellInScope(cell, minCells);
+            return cell && !this.isCellInScope(cell, minCells);
         }.bind(this));
     }
     return cells;
@@ -3757,7 +3790,7 @@ BattleManagerTBS.makeLineScope = function (center, range, min, param) {
     if (min) {
         var minCells = this.makeLineScope(center, min, null, param);
         cells = cells.filter(function (cell) {
-            return !this.isCellInScope(cell, minCells);
+            return cell && !this.isCellInScope(cell, minCells);
         }.bind(this));
     }
     return cells;
@@ -3777,7 +3810,7 @@ BattleManagerTBS.makeCrossScope = function (center, range, param) {
     if (min) {
         var minCells = this.makeCrossScope(center, min, null, param);
         cells = cells.filter(function (cell) {
-            return !this.isCellInScope(cell, minCells);
+            return cell && !this.isCellInScope(cell, minCells);
         }.bind(this));
     }
     return cells;
@@ -4238,10 +4271,10 @@ BattleManagerTBS.prepareDirectionalDamageBonus = function (user, targets, item) 
             effects -= entity.getDirectionalDmgReduction("back");
         } else if (user.getDir() === 2 && dir === 8 || user.getDir() === 8 && dir === 2 ||
             user.getDir() === 4 && dir === 6 || user.getDir() === 6 && dir === 4) {
-            effects = Lecode.S_TBS.faceDirectionalDamageEffects;
-            effects += item.leTbs_directionalDmgBonus.face;
-            effects += user.getDirectionalDmgBonus("face");
-            effects -= entity.getDirectionalDmgReduction("face");
+            effects = Lecode.S_TBS.frontDirectionalDamageEffects;
+            effects += item.leTbs_directionalDmgBonus.front;
+            effects += user.getDirectionalDmgBonus("front");
+            effects -= entity.getDirectionalDmgReduction("front");
         } else {
             effects = Lecode.S_TBS.sideDirectionalDamageEffects;
             effects += item.leTbs_directionalDmgBonus.side;
@@ -4493,17 +4526,6 @@ BattleManagerTBS.scrollLeft = function (distance) {
 
 BattleManagerTBS.scrollUp = function (distance) {
     this.scrollDown(-distance);
-};
-
-BattleManagerTBS.movableLayers = function () {
-    return [this.getLayer("scopes"), this.getLayer("ground"), this.getLayer("groundEntities"),
-    this.getLayer("battlers"), this.getLayer("animations"), this.getLayer("movableInfo")
-    ];
-};
-
-BattleManagerTBS.mapVisuals = function () {
-    var scene = LeUtilities.getScene();
-    return [scene._windowPositioningInfo, scene._windowCommand, scene._windowSkill, scene._windowItem];
 };
 
 BattleManagerTBS.isAnimationPlaying = function () {
@@ -6928,8 +6950,7 @@ TBSSequenceManager.prototype.endOfSequence = function () {
         this.start(data[0], data[1], data[2]);
         this.update();
     } else {
-        var entities = LeUtilities.uniqArray(this._affectedTargets);
-        BattleManagerTBS.processCounterAttack(entities, this.getUser(), this._action);
+        BattleManagerTBS.onPrimarySequenceEnd(this);
         this._affectedTargets = [];
     }
 };
@@ -7480,16 +7501,23 @@ TBSEntity.prototype.onBattleStart = function () {
 TBSEntity.prototype.onTurnStart = function () {
     this.setMovePoints();
     this.callSequence("turn_start");
-    /*if (this.battler().isActor())
-        this.newAnimation(180,false,false);
-    else
-        this.newAnimation(181,false,false);*/
+    this._turnPlayed = false;
+	this._sprite._leU_loopFlash = true;
+	this._sprite._leU_loopFlashData = {
+		color: [255, 255, 255, 255],
+		duration: 20
+	};
+    setTimeout(function(sprite) {
+        sprite._leU_loopFlash = false;
+        sprite.leU_clearFlash();
+    }.bind(this,this._sprite), 1000);
 };
 
 TBSEntity.prototype.onTurnEnd = function () {
     this._battler.onTurnEnd();
     this.addPopup();
     this.setMovePoints();
+    this._turnPlayed = true;
     this._movePerformed = false;
     this._actionPerformed = false;
 };
@@ -7509,7 +7537,7 @@ TBSEntity.prototype.onRevive = function () {
     BattleManagerTBS.onEntityRevive(this);
 };
 
-TBSEntity.prototype.onDamage = function () {
+TBSEntity.prototype.onDamage = function (user) {
     this.addPopup();
     this.checkDeath();
 };
@@ -7780,10 +7808,11 @@ TBSEntity.prototype.getSideCells = function () {
 };
 
 //- TODO: MOVE the 3 following functions to BattleManagerTBS
-TBSEntity.prototype.forceAction = function (skillId, target) {
-    var skill = $dataSkills[skillId];
+TBSEntity.prototype.forceAction = function (objId, target, objType) {
+    objType = objType || "skill";
+    var obj = objType === "skill" ? $dataSkills[objId] : $dataItems[objId];
     this.forceActionSetTarget(target);
-    this.executeAction(skill);
+    this.executeAction(obj);
 };
 
 TBSEntity.prototype.forceActionSetTarget = function (target) {
@@ -8463,8 +8492,8 @@ TBSEntity.prototype.addPopup = function () {
     this._sprite.addPopup();
 };
 
-TBSEntity.prototype.newAnimation = function (animation, mirror, delay) {
-    this._sprite.newAnimation(animation, mirror, delay);
+TBSEntity.prototype.newAnimation = function (animation, mirror, delay, isLoop) {
+    this._sprite.newAnimation(animation, mirror, delay, isLoop);
 };
 
 TBSEntity.prototype.battler = function () {
@@ -8715,8 +8744,9 @@ TBSEntity_Sprite.prototype.addPopup = function () {
     BattleManagerTBS.getLayer("movableInfo").addChild(sprite);
 };
 
-TBSEntity_Sprite.prototype.newAnimation = function (id, mirror, delay) {
+TBSEntity_Sprite.prototype.newAnimation = function (id, mirror, delay, isLoop) {
     var sprite = new Sprite_TBSEntityAnimation();
+    sprite._isLoopAnim = isLoop;
     sprite.setup(this, $dataAnimations[id], mirror, delay);
     BattleManagerTBS.getLayer("animations").addChild(sprite);
     this._animationSprites.push(sprite);
@@ -8736,7 +8766,7 @@ TBSEntity_Sprite.prototype.checkLoopAnimations = function () {
     });
     anims.forEach(function (id) {
         if (!exists[id]) {
-            this.newAnimation(id, false, 0);
+            this.newAnimation(id, false, 0, true);
         }
     }.bind(this));
 };
@@ -8766,6 +8796,12 @@ TBSEntity_Sprite.prototype.isValidPose = function (pose) {
 
 TBSEntity_Sprite.prototype.filenameID = function () {
     return this._entity.filenameID();
+};
+
+TBSEntity_Sprite.prototype.isAnimationPlaying = function () {
+    return this._animationSprites.filter(function (sprite) {
+        return !sprite._isLoopAnim;
+    }).length > 0;
 };
 
 
@@ -9238,12 +9274,12 @@ DataManager.processLeTBSTagsForBattlers = function () {
             obj.leTbs_knockbackBonus = 0;
             obj.leTbs_knockbackReduction = 0;
             obj.leTbs_directionalDmgBonus = {
-                face: 0,
+                front: 0,
                 back: 0,
                 side: 0
             };
             obj.leTbs_directionalDmgReduction = {
-                face: 0,
+                front: 0,
                 back: 0,
                 side: 0
             };
@@ -9319,10 +9355,10 @@ DataManager.processLeTBSTagsForBattlers = function () {
                         obj.leTbs_directionalDmgBonus.back = Number(RegExp.$1);
                     else if (line.match(/back_dmg_reduction\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgReduction.back = Number(RegExp.$1);
-                    else if (line.match(/face_dmg_bonus\s?:\s?(.+)/i))
-                        obj.leTbs_directionalDmgBonus.face = Number(RegExp.$1);
-                    else if (line.match(/face_dmg_reduction\s?:\s?(.+)/i))
-                        obj.leTbs_directionalDmgReduction.face = Number(RegExp.$1);
+                    else if (line.match(/front_dmg_bonus\s?:\s?(.+)/i))
+                        obj.leTbs_directionalDmgBonus.front = Number(RegExp.$1);
+                    else if (line.match(/front_dmg_reduction\s?:\s?(.+)/i))
+                        obj.leTbs_directionalDmgReduction.front = Number(RegExp.$1);
                     else if (line.match(/side_dmg_bonus\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgBonus.side = Number(RegExp.$1);
                     else if (line.match(/side_dmg_reduction\s?:\s?(.+)/i))
@@ -9390,12 +9426,12 @@ DataManager.processLeTBSTagsForEquipmentsAndStates = function () {
             obj.leTbs_knockbackBonus = 0;
             obj.leTbs_knockbackReduction = 0;
             obj.leTbs_directionalDmgBonus = {
-                face: 0,
+                front: 0,
                 back: 0,
                 side: 0
             };
             obj.leTbs_directionalDmgReduction = {
-                face: 0,
+                front: 0,
                 back: 0,
                 side: 0
             };
@@ -9458,10 +9494,10 @@ DataManager.processLeTBSTagsForEquipmentsAndStates = function () {
                         obj.leTbs_directionalDmgBonus.back = Number(RegExp.$1);
                     else if (line.match(/back_dmg_reduction\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgReduction.back = Number(RegExp.$1);
-                    else if (line.match(/face_dmg_bonus\s?:\s?(.+)/i))
-                        obj.leTbs_directionalDmgBonus.face = Number(RegExp.$1);
-                    else if (line.match(/face_dmg_reduction\s?:\s?(.+)/i))
-                        obj.leTbs_directionalDmgReduction.face = Number(RegExp.$1);
+                    else if (line.match(/front_dmg_bonus\s?:\s?(.+)/i))
+                        obj.leTbs_directionalDmgBonus.front = Number(RegExp.$1);
+                    else if (line.match(/front_dmg_reduction\s?:\s?(.+)/i))
+                        obj.leTbs_directionalDmgReduction.front = Number(RegExp.$1);
                     else if (line.match(/side_dmg_bonus\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgBonus.side = Number(RegExp.$1);
                     else if (line.match(/side_dmg_reduction\s?:\s?(.+)/i))
@@ -9504,12 +9540,12 @@ DataManager.processLeTBSTagsForObjects = function () {
             obj.leTbs_aoeParam = [];
             obj.leTbs_collisionFormula = null;
             obj.leTbs_directionalDmgBonus = {
-                face: 0,
+                front: 0,
                 back: 0,
                 side: 0
             };
             obj.leTbs_directionalDmgReduction = {
-                face: 0,
+                front: 0,
                 back: 0,
                 side: 0
             };
@@ -9567,10 +9603,10 @@ DataManager.processLeTBSTagsForObjects = function () {
                         obj.leTbs_directionalDmgBonus.back = Number(RegExp.$1);
                     else if (line.match(/back_dmg_reduction\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgReduction.back = Number(RegExp.$1);
-                    else if (line.match(/face_dmg_bonus\s?:\s?(.+)/i))
-                        obj.leTbs_directionalDmgBonus.face = Number(RegExp.$1);
-                    else if (line.match(/face_dmg_reduction\s?:\s?(.+)/i))
-                        obj.leTbs_directionalDmgReduction.face = Number(RegExp.$1);
+                    else if (line.match(/front_dmg_bonus\s?:\s?(.+)/i))
+                        obj.leTbs_directionalDmgBonus.front = Number(RegExp.$1);
+                    else if (line.match(/front_dmg_reduction\s?:\s?(.+)/i))
+                        obj.leTbs_directionalDmgReduction.front = Number(RegExp.$1);
                     else if (line.match(/side_dmg_bonus\s?:\s?(.+)/i))
                         obj.leTbs_directionalDmgBonus.side = Number(RegExp.$1);
                     else if (line.match(/side_dmg_reduction\s?:\s?(.+)/i))

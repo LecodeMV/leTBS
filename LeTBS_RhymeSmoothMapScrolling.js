@@ -20,7 +20,7 @@ Imported["LeTBS_RhymeSmoothMapScrolling"] = true;
 var Lecode = Lecode || {};
 Lecode.S_TBS.RhymeSmoothMapScrolling = {};
 /*:
- * @plugindesc Scroll smoothly the map
+ * @plugindesc Compatibility patch for Rhyme's plugin
  * @author Lecode
  * @version 1.0
  *

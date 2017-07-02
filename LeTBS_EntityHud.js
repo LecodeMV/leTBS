@@ -32,8 +32,6 @@ Lecode.S_TBS.EntityHud = {};
 var parameters = PluginManager.parameters('LeTBS_EntityHud');
 
 
-
-
 /*-------------------------------------------------------------------------
 * TBSEntity
 -------------------------------------------------------------------------*/
@@ -45,7 +43,7 @@ TBSEntity.prototype.createComponents = function () {
 };
 
 Lecode.S_TBS.EntityHud.oldTBSEntity_update = TBSEntity.prototype.update;
-TBSEntity.prototype.update = function() {
+TBSEntity.prototype.update = function () {
     Lecode.S_TBS.EntityHud.oldTBSEntity_update.call(this);
     this._miniHud.updatePosition();
 };
@@ -69,8 +67,8 @@ TBSEntity.prototype.onTurnEnd = function () {
 };
 
 Lecode.S_TBS.EntityHud.oldTBSEntity_onDamage = TBSEvent.prototype.onDamage;
-TBSEvent.prototype.onDamage = function () {
-    Lecode.S_TBS.EntityHud.oldTBSEntity_onDamage.call(this);
+TBSEvent.prototype.onDamage = function (user) {
+    Lecode.S_TBS.EntityHud.oldTBSEntity_onDamage.call(this, user);
     this._miniHud.refresh();
 };
 
@@ -145,6 +143,6 @@ Window_TBSEntityHud.prototype.refresh = function () {
     this.drawGauge(x, y, w, battler.hpRate(), color1, color2);
 };
 
-Window_TBSEntityHud.prototype.gaugeHeight = function() {
+Window_TBSEntityHud.prototype.gaugeHeight = function () {
     return 5;
 };

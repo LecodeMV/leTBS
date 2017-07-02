@@ -139,14 +139,6 @@ Window_TBSStatus.prototype.drawSprite = function (x, y) {
         var dx = eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxW) / 2 - pw / 2;
         var dy = 20 + eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxH) / 2 - ph / 2;
         this.contents.blt(fbitmap, 0, 0, pw, ph, dx, dy);
-        /*var pw = fbitmap.width / (sprite._maxFrame["idle"] + 1);
-        var ph = fbitmap.height / 4;
-        var bitmap = new Bitmap(pw, ph);
-        bitmap.blt(fbitmap, pw / 2 - 20, 0, pw, ph);
-        var window = this;
-        var dx = eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxW) / 2 - bitmap.width / 2;
-        var dy = 20 + eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxH) / 2 - bitmap.height / 2;
-        this.contents.blt(bitmap, 0, 0, bitmap.width, bitmap.height, dx, dy);*/
         return;
     }
     Lecode.S_TBS.RTPUse.oldWindowTBSStatus_drawSprite.call(this, x, y);

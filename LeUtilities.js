@@ -814,3 +814,12 @@ LeUtilities.doesResourceExist = function(path) {
     var bitmap = Bitmap.load(path);
     return !bitmap.isError();
 };
+
+LeUtilities.fastEase = function(time,step,func) {
+    step = Math.round(step);
+    var stepsTime = 0;
+    while(stepsTime < time) {
+        stepsTime += step;
+        setTimeout(func, stepsTime);
+    }
+};

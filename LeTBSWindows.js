@@ -50,12 +50,6 @@ Lecode.S_TBS.Windows.statusWindowSpriteBoxW = 100;
 Lecode.S_TBS.Windows.statusWindowSpriteBoxH = "window.lineHeight(2);";
 Lecode.S_TBS.Windows.statusWindowMaxStates = 3;
 
-Lecode.S_TBS.Windows.commandWindowW = "200";
-Lecode.S_TBS.Windows.commandWindowVisibleLines = "4";
-Lecode.S_TBS.Windows.commands = "['Move','Attack','Skill','Item','Pass','Examine']";
-Lecode.S_TBS.Windows.commandIcons = "[82,76,64,182,75,84]";
-Lecode.S_TBS.Windows.commandWindowFloatRange = 20;
-
 Lecode.S_TBS.Windows.skillWindowW = "450";
 Lecode.S_TBS.Windows.skillWindowH = "window.fittingHeight(4);";
 Lecode.S_TBS.Windows.skillWindowFloatRange = 20;
@@ -86,6 +80,7 @@ Window_TBSPositioning.prototype.constructor = Window_TBSPositioning;
 Window_TBSPositioning.prototype.initialize = function () {
     var w = this.windowWidth();
     var h = this.windowHeight();
+    this._haha = true;
     Window_Selectable.prototype.initialize.call(this, 0, 0, w, h);
     this._lastIndex = 0;
     this._disabled = {};
@@ -112,7 +107,7 @@ Window_TBSPositioning.prototype.windowWidth = function () {
 };
 
 Window_TBSPositioning.prototype.windowHeight = function () {
-    return this.fittingHeight(4 * 3);
+    return this.fittingHeight(4 * this.visibleItems());
 };
 
 Window_TBSPositioning.prototype.itemFrameWidth = function () {
@@ -163,6 +158,8 @@ Window_TBSPositioning.prototype.setFixedActor = function (actor) {
 };
 
 Window_TBSPositioning.prototype.isEnabled = function (index) {
+    if (!this._disabled[index] &&
+        BattleManagerTBS.allyEntities().length === BattleManagerTBS.allyStartCells().length) return false;
     return !this._fixedIndexes.contains(index);
 };
 
@@ -410,9 +407,7 @@ Window_TBSStatus.prototype.refresh = function () {
     if (!this._entity) return;
     var x, y, w, h;
     //- Face
-    x = 20;
-    y = this.lineHeight();
-    this.drawSprite(x, y);
+    this.drawSprite();
     //- Name
     x = Lecode.S_TBS.Windows.statusWindowSpriteBoxW;
     y = 0;
@@ -432,7 +427,7 @@ Window_TBSStatus.prototype.refresh = function () {
     this.drawActorIcons(this._entity.battler(), x, y, Window_Base._iconWidth * max);
 };
 
-Window_TBSStatus.prototype.drawSprite = function (x, y) {
+Window_TBSStatus.prototype.drawSprite = function () {
     var bitmap = ImageManager.loadLeTBSStatus(this._entity.filenameID());
     var window = this;
     bitmap.addLoadListener(function () {
@@ -440,159 +435,6 @@ Window_TBSStatus.prototype.drawSprite = function (x, y) {
         var dy = 20 + eval(Lecode.S_TBS.Windows.statusWindowSpriteBoxH) / 2 - bitmap.height / 2;
         this.contents.blt(bitmap, 0, 0, bitmap.width, bitmap.height, dx, dy);
     }.bind(this));
-};
-
-
-/*-------------------------------------------------------------------------
-* Window_TBSCommand
--------------------------------------------------------------------------*/
-Window_TBSCommand.prototype = Object.create(Window_Command.prototype);
-Window_TBSCommand.prototype.constructor = Window_TBSCommand;
-
-Window_TBSCommand.prototype.initialize = function () {
-    Window_Command.prototype.initialize.call(this, 0, 0);
-    this.openness = 0;
-    this.deactivate();
-    this._battler = null;
-    this._entity = null;
-    this.startFloat();
-    this.endFloat();
-};
-
-Window_TBSCommand.prototype.startFloat = function () {
-    this._leU_floatData = {
-        range: [0, Lecode.S_TBS.Windows.commandWindowFloatRange],
-        sens: ["+", "+"],
-        speed: 2
-    };
-};
-
-Window_TBSCommand.prototype.endFloat = function () {
-    this._leU_floatData.speed = 0;
-};
-
-Window_TBSCommand.prototype.resumeFloat = function () {
-    this._leU_floatData.speed = 2;
-};
-
-Window_TBSCommand.prototype.windowWidth = function () {
-    var window = this;
-    return eval(Lecode.S_TBS.Windows.commandWindowW);
-};
-
-Window_TBSCommand.prototype.numVisibleRows = function () {
-    var window = this;
-    return eval(Lecode.S_TBS.Windows.commandWindowVisibleLines);
-};
-
-Window_TBSCommand.prototype.makeCommandList = function () {
-    var window = this;
-    if (this._battler) {
-        var array = eval(Lecode.S_TBS.Windows.commands);
-        array.forEach(function (com) {
-            eval("window.add" + com + "Command();");
-        }.bind(this));
-    }
-};
-
-Window_TBSCommand.prototype.addAttackCommand = function () {
-    this.addCommand(TextManager.attack, 'attack', this._entity.canAttackCommand());
-};
-
-Window_TBSCommand.prototype.addSkillCommand = function () {
-    this.addSkillCommands();
-};
-
-Window_TBSCommand.prototype.addSkillCommands = function () {
-    var skillTypes = this._battler.addedSkillTypes();
-    skillTypes.sort(function (a, b) {
-        return a - b;
-    });
-    skillTypes.forEach(function (stypeId) {
-        var name = $dataSystem.skillTypes[stypeId];
-        this.addCommand(name, 'skill', this._entity.canSkillCommand(), stypeId);
-    }, this);
-};
-
-Window_TBSCommand.prototype.addGuardCommand = function () {
-    this.addCommand(TextManager.guard, 'guard', this._entity.canGuard());
-};
-
-Window_TBSCommand.prototype.addItemCommand = function () {
-    this.addCommand(TextManager.item, 'item', this._entity.canItemCommand());
-};
-
-Window_TBSCommand.prototype.addMoveCommand = function () {
-    this.addCommand("Move", "move", this._entity.canMoveCommand());
-};
-
-Window_TBSCommand.prototype.addPassCommand = function () {
-    this.addCommand("Pass", "pass");
-};
-
-Window_TBSCommand.prototype.addExamineCommand = function () {
-    this.addCommand("Examine", "examine");
-};
-
-Window_TBSCommand.prototype.setup = function (actor, entity) {
-    this._battler = actor;
-    this._entity = entity;
-    this.clearCommandList();
-    this.makeCommandList();
-    this.refresh();
-    this.selectLast();
-    this.activate();
-    this.show();
-    this.open();
-};
-
-Window_TBSCommand.prototype.update = function () {
-    Window_Command.prototype.update.call(this);
-    if (this._entity) {
-        var x = this._entity._posX - this.windowWidth() / 2;
-        var y = this._entity._posY - this.windowHeight();
-        this.x = x + this._entity.width() / 2;
-        this.y = y;
-        if (this.y < 0)
-            this.y += this.windowHeight();
-        while (this.x < 0)
-            this.x++;
-        while ((this.x + this.width) > Graphics.width)
-            this.x--;
-    }
-};
-
-Window_TBSCommand.prototype.processOk = function () {
-    if (this._battler) {
-        if (ConfigManager.commandRemember) {
-            this._battler.setLastCommandSymbol(this.currentSymbol());
-        } else {
-            this._battler.setLastCommandSymbol('');
-        }
-    }
-    Window_Command.prototype.processOk.call(this);
-};
-
-Window_TBSCommand.prototype.selectLast = function () {
-    this.select(0);
-    if (this._battler && ConfigManager.commandRemember) {
-        this.selectSymbol(this._battler.lastCommandSymbol());
-    }
-};
-
-Window_TBSCommand.prototype.drawItem = function (index) {
-    var rect = this.itemRectForText(index);
-    var align = this.itemTextAlign();
-    this.resetTextColor();
-    this.changePaintOpacity(this.isCommandEnabled(index));
-    this.drawIcon(this.commandIcon(index), rect.x, rect.y + 2);
-    rect.x += Window_Base._iconWidth + 2;
-    this.drawText(this.commandName(index), rect.x, rect.y, rect.width, align);
-};
-
-Window_TBSCommand.prototype.commandIcon = function (index) {
-    var array = eval(Lecode.S_TBS.Windows.commandIcons);
-    return array[index];
 };
 
 /*-------------------------------------------------------------------------
