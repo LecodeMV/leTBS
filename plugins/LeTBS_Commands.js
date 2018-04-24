@@ -242,7 +242,7 @@ Window_TBSCommand.prototype.makeCommandList = function () {
         var str = this.getCommandsString();
         var array = str.split(",").map(function (str) {
             return str.trim();
-        }).filter(function(str){
+        }).filter(function (str) {
             return str;
         });
         this.makeIcons(array);
@@ -498,6 +498,39 @@ BattleManagerTBS.previewObjectScope = function (entity, item, type) {
         this.drawAttackScope(entity);
     else
         this.drawItemScope(entity, item);
+    //- New LOS Test
+    /*let res = this.gridLoSRes;
+    if (res) {
+        console.log("res:", res);
+        let canvas = document.getElementById("GameCanvas");
+        let ctx = canvas.getContext('2d');
+        this.getLayer("scopes").clear();
+        res.cells.forEach(c => {
+            let color = "#FFFFFF";
+            if (c._isObstacle) {
+                color = c._selectable ? "#FFFFFF" : "#000000";
+            } else if (res.intersectingCells.indexOf(c) > -1) {
+                color = c._selectable ? "#F2F2F2" : "#A4A4A4";
+            } else if (!c._selectable) {
+                color = "#848484";
+            }
+            this.getLayer("scopes").drawCell(c.x, c.y, 220, color);
+        });
+
+        let g = this.getLayer("debug").graphics;
+        g.beginFill(0x084B8A);
+        g.lineStyle(1, 0x084B8A);
+        console.log("res.polylines:" ,res.polylines);
+        res.polylines.forEach(poly => {
+            poly.forEach(line => {
+                let start = line[0];
+                let end = line[1];
+                g.moveTo(start[0], start[1]);
+                g.lineTo(end[0], end[1]);
+            });
+        });
+        g.endFill();
+    }*/
 };
 
 

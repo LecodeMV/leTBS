@@ -759,30 +759,6 @@ Lecode.S_TBS.allyRegionId = 5;
 Lecode.S_TBS.enemyRegionId = 1;
 
 
-/*-------------------------------------------------------------------------
-* PluginManager
--------------------------------------------------------------------------*/
-/*Lecode.S_TBS.oldPluginManager_setup = PluginManager.setup;
-PluginManager.setup = function () {
-    this.loadLeTBSDependency("easystar.js");
-    this.loadLeTBSDependency("Tween.js");
-    this.loadLeTBSDependency("async.min.js");
-    var async = require("async");
-    console.log("async:" ,async);
-    Lecode.S_TBS.oldPluginManager_setup.call(this);
-};
-
-PluginManager.loadLeTBSDependency = function(name) {
-    var url = "js/libs" + name;
-    var script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = url;
-    script.async = false;
-    script.onerror = this.onError.bind(this);
-    script._url = url;
-    document.body.appendChild(script);
-};*/
-
 
 /*-------------------------------------------------------------------------
 * Spriteset_BattleTBS
@@ -868,7 +844,9 @@ Spriteset_BattleTBS.prototype.createBattleLayers = function () {
     //-Debug
     var bitmap = new Bitmap(Graphics.width, Graphics.height);
     this._debugLayer = new Sprite(bitmap);
-    this._debugLayer.z = 7;
+    this._debugLayer.z = 99;
+    this._debugLayer.graphics = new PIXI.Graphics();
+    this._debugLayer.addChild(this._debugLayer.graphics);
     this._tbsLayer.addChild(this._debugLayer);
 };
 
@@ -2169,7 +2147,7 @@ BattleManagerTBS.update = function () {
     this.updateWindowsInputOpacity();
     this.updateTBSObjects();
     this.updatePhase();
-    this.updateBattlers();
+    this.updateEntities();
     this.updateTBSEvents();
     this.updateDestination();
 };
@@ -2296,14 +2274,16 @@ BattleManagerTBS.updatePhase = function () {
     }
 };
 
-BattleManagerTBS.updateBattlers = function () {
-    this.allEntities().forEach(function (entity) {
+BattleManagerTBS.updateEntities = function () {
+    let entities = this.allEntities();
+    for (let i = 0; i < entities.length; i++) {
+        const entity = entities[i];
         entity.update();
-    }.bind(this));
+    }
 };
 
 BattleManagerTBS.updateTBSEvents = function () {
-    for (var i = 0; i < this._tbsEvents.length; i++) {
+    for (let i = 0; i < this._tbsEvents.length; i++) {
         this._tbsEvents[i].update();
     }
 };
@@ -4158,6 +4138,7 @@ BattleManagerTBS.drawActionScope = function (entity) {
     var invalidOpa = this._actionScopeParam.invalidOpa;
     var scope = this._actionScope.cells;
     var invalidCondition = "!cell._selectable || (cell.isObstacleForLOS() && !cell.isThereEntity())";
+    invalidCondition = "!cell._selectable";
     this.getLayer("scopes").clear();
     this.drawScope(scope, color, opacity, invalidOpa, invalidCondition);
 };
@@ -4256,7 +4237,8 @@ BattleManagerTBS.getScopeFromData = function (data, center, param) {
     var scope = [];
 
     var scopesStr = data.split(";");
-    for (var i = 0; i < scopesStr.length; i++) {
+    let i = scopesStr.length;
+    while (i--) {
         var scopeStr = scopesStr[i].trim();
         scope = scope.concat(this.makeScope(scopeStr, center, param));
     }
@@ -4271,20 +4253,18 @@ BattleManagerTBS.getScopeFromData = function (data, center, param) {
 
 BattleManagerTBS.makeScope = function (data, center, param) {
     var str, min, size;
-    var e = param.user;
-    if (e)
-        var a = e.battler();
 
     if (data.match(/(circle|line|square|cross)\((.+)\)/i)) {
         if (RegExp.$2.includes(",")) {
             str = RegExp.$2.split(",");
-            size = Math.floor(Number(eval(str[0])));
-            min = Math.floor(Number(eval(str[1])));
+            size = Math.floor(Number(parseInt(str[0])));
+            min = Math.floor(Number(parseInt(str[1])));
         } else {
-            size = Math.floor(Number(eval(RegExp.$2)));
+            size = Math.floor(Number(parseInt(RegExp.$2)));
         }
     }
 
+    let scope = [];
     if (data.match(/custom\((.+)\)/i)) {
         var scopeData = Lecode.S_TBS.Config.Custom_Scopes[String(RegExp.$1)];
         scope = this.getScopeFromRawData(scopeData, center, param);
@@ -4330,27 +4310,25 @@ BattleManagerTBS.getScopeFromRawData = function (scopeData, center, param) {
 };
 
 BattleManagerTBS.makeCircleScope = function (center, range, min, param) {
-    var cells = [];
-    var start = param.exclude_center ? 1 : 0;
-    var x = center.x,
-        y = center.y;
-    for (var i = start; i <= range; i++) {
+    let cells = [];
+    let x = center.x;
+    y = center.y;
+    let i = range + 1;
+    while (i--) {
         cells.push(this.getCellAt(x + i, y));
         cells.push(this.getCellAt(x - i, y));
         cells.push(this.getCellAt(x, y + i));
         cells.push(this.getCellAt(x, y - i));
-        for (var a = start; a <= range - i; a++) {
-            cells.push(this.getCellAt(x - i, y - a));
-            cells.push(this.getCellAt(x - i, y + a));
-            cells.push(this.getCellAt(x + i, y - a));
-            cells.push(this.getCellAt(x + i, y + a));
+        let j = range - i + 1;
+        while (j--) {
+            cells.push(this.getCellAt(x - i, y - j));
+            cells.push(this.getCellAt(x - i, y + j));
+            cells.push(this.getCellAt(x + i, y - j));
+            cells.push(this.getCellAt(x + i, y + j));
         }
     }
-    cells = cells.filter(function (cell) {
-        return cell;
-    }.bind(this));
     if (min) {
-        var minCells = this.makeCircleScope(center, min, null, param);
+        let minCells = this.makeCircleScope(center, min, null, param);
         cells = cells.filter(function (cell) {
             return !this.isCellInScope(cell, minCells);
         }.bind(this));
@@ -4496,9 +4474,10 @@ BattleManagerTBS.applyParamToScope = function (cells, center, param) {
             cells = this.makeScopeReachable(cells, param.points, center);
     }
     if (param.need_check_los) {
-        cells.forEach(function (cell) {
-            cell._selectable = true;
-        }.bind(this));
+        let i = cells.length;
+        while (i--) {
+            cells[i]._selectable = true;
+        }
         if (param.select) {
             cells = this.selectScopeTargets(cells, param.select, param.user);
         }
@@ -4669,64 +4648,17 @@ BattleManagerTBS.selectScopeTargets = function (cells, str, user) {
 };
 
 BattleManagerTBS.checkScopeVisibility = function (cells, center) {
-    var w = $gameMap.tileWidth();
-    var h = $gameMap.tileHeight();
-    var cx = center.x * w + w / 2;
-    var cy = center.y * h + h / 2;
-    var obstacles = [];
-    var boundaries = this.getScopeBoundaries(cells);
-    for (var x = boundaries.left; x <= boundaries.right; x++) {
-        for (var y = boundaries.top; y <= boundaries.bottom; y++) {
-            var cell = this.getCellAt(x, y);
-            if (cell.isObstacleForLOS())
-                obstacles.push(cell);
-        }
+    gridLoS.settings({
+        cellVisibleProp: "_selectable",
+        cellObstacleProp: "_isObstacle",
+        cellWidth: 48,
+        cellHeight: 48
+    });
+    let i = cells.length;
+    while (i--) {
+        cells[i]._isObstacle = cells[i].isObstacleForLOS();
     }
-    /*for (var k = 0; k < cells.length; k++) {
-    	if (cells[k].isObstacle())
-    		obstacles.push(cells[k]);
-    }*/
-    var nonVisible = [];
-
-    /*for (var i = 0; i < cells.length; i++) {
-        cells[i]._selectable = true;
-    }*/
-
-    for (i = 0; i < obstacles.length; i++) {
-        var cellsToCheck = this.cellsToCheckNearObstacle(obstacles[i], cells, center);
-        for (var j = 0; j < cellsToCheck.length; j++) {
-            var cellToCheck = cellsToCheck[j];
-            if (obstacles[i].x == cellToCheck.x && obstacles[i].y == cellToCheck.y)
-                continue;
-            var dx = cellToCheck.x * w + w / 2;
-            var dy = cellToCheck.y * h + h / 2;
-            //- var sprite = SceneManager._scene._spriteset._debugLayer;
-            var pixels = LeUtilities.getPixelsOfLine(cx, cy, dx, dy);
-            for (var k = 0; k < obstacles.length; k++) {
-                var obstacle = obstacles[k];
-                if (obstacle.x == center.x && obstacle.y == center.y)
-                    continue;
-                if (obstacle.isSame(cellToCheck))
-                    continue;
-                var x = obstacle.x * w;
-                var y = obstacle.y * h;
-                for (var m = 0; m < pixels.length; m++) {
-                    if (LeUtilities.doesRectIncludeCoord(x, y, w, h, pixels[m])) {
-                        nonVisible.push([cellToCheck.x, cellToCheck.y]);
-                        m = pixels.length;
-                    }
-                }
-            }
-        }
-    }
-
-    for (i = 0; i < nonVisible.length; i++) {
-        for (var j = 0; j < cells.length; j++) {
-            if (cells[j].x === nonVisible[i][0] && cells[j].y === nonVisible[i][1]) {
-                cells[j]._selectable = false;
-            }
-        }
-    }
+    this.gridLoSRes = gridLoS.make(cells, center, 20);
 };
 
 BattleManagerTBS.checkSingleCellVisibility = function (cell, center) {
@@ -4784,7 +4716,8 @@ BattleManagerTBS.cellsToCheckNearObstacle = function (obstacle, cells, center) {
         condition = "cell.y <= obstacle.y";
     else if (obstacle.x == cx && obstacle.y > cy)
         condition = "cell.y >= obstacle.y";
-    for (var i = 0; i < cells.length; i++) {
+    let i = cells.length;
+    while (i--) {
         var cell = cells[i];
         if (cell._selectable && eval(condition))
             result.push(cell);
@@ -4802,9 +4735,7 @@ BattleManagerTBS.getScopeBoundaries = function (cells) {
     if (cells.length === 0) {
         return {};
     }
-    var copy = cells.filter(function (cell) {
-        return true;
-    });
+    var copy = cells.concat();
     var cellsByX = copy.sort(function (cellA, cellB) {
         return (cellA.x > cellB.x) ? 1 : ((cellA.x < cellB.x) ? -1 : 0);
     });
@@ -4965,7 +4896,8 @@ BattleManagerTBS.drawScope = function (cells, color, opa, invalidOpa, invalidCon
 };
 
 BattleManagerTBS.isCellInScope = function (cell, scope) {
-    for (var i = 0; i < scope.length; i++) {
+    let i = scope.length;
+    while (i--) {
         if (scope[i].isSame(cell))
             return true;
     }
@@ -8895,7 +8827,7 @@ TBSEntity.prototype.getTiedEvents = function () {
 };
 
 TBSEntity.prototype.initializeSpeed = function () {
-    var moveSpeed = this.battler().getLeTBSTagNumberValue("moveSpeed",Lecode.S_TBS.battlersMoveSpeed);
+    var moveSpeed = this.battler().getLeTBSTagNumberValue("moveSpeed", Lecode.S_TBS.battlersMoveSpeed);
     this.setSpeed(moveSpeed);
 };
 

@@ -2807,14 +2807,6 @@ PluginManager._errorUrls    = [];
 PluginManager._parameters   = {};
 
 PluginManager.setup = function(plugins) {
-    this.loadLeTBSDependency("easystar.js");
-    this.loadLeTBSDependency("Tween.js");
-    this.loadLeTBSDependency("async.min.js");
-    setTimeout(() => {
-        //var async = require("async");
-        console.log("async:" ,async);
-    }, 1000);
-
     plugins.forEach(function(plugin) {
         if (plugin.status && !this._scripts.contains(plugin.name)) {
             this.setParameters(plugin.name, plugin.parameters);
@@ -2841,17 +2833,6 @@ PluginManager.setParameters = function(name, parameters) {
 
 PluginManager.loadScript = function(name) {
     var url = this._path + name;
-    var script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = url;
-    script.async = false;
-    script.onerror = this.onError.bind(this);
-    script._url = url;
-    document.body.appendChild(script);
-};
-
-PluginManager.loadLeTBSDependency = function(name) {
-    var url = "js/libs/" + name;
     var script = document.createElement('script');
     script.type = 'text/javascript';
     script.src = url;

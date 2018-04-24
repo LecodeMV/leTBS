@@ -33,6 +33,7 @@ var $plugins =
 {"name":"LeTBS_RandomSpawn","status":true,"description":"Spawn neutral entities randomly","parameters":{}},
 {"name":"LeTBS_SpreadState","status":true,"description":"Spread states in a given area","parameters":{}},
 {"name":"LeTBS_BodyMotion","status":false,"description":"Animate LeTBS entities","parameters":{}},
+{"name":"LeTBS_FogOfWar","status":false,"description":"Improve popups and show states alterations","parameters":{}},
 {"name":"-------------------------","status":true,"description":"","parameters":{}},
 {"name":"YEP_BuffsStatesCore","status":true,"description":"v1.12 Alter the basic mechanics behind buffs and states\nthat aren't adjustable within the RPG Maker editor.","parameters":{"---Turn Indicator---":"","Show Turns":"true","Font Size":"16","Turn Alignment":"right","Turn Buffer X":"-3","Turn Buffer Y":"-6","State Color":"0","Buff Color":"24","Debuff Color":"2","---Enemy Icons---":"","Show Enemy Icons":"true","Enemy Buff Turn":"true","Enemy State Turn":"true","Enemy State Counter":"true","---Buff Settings---":"","Default Limit":"4","Maximum Limit":"8","Buff Formula":"this._buffs[paramId] * 0.25 + 1.0","Show Buff Rate":"false","---State Settings---":"","Reapply Rules":"1","Show Enemy Turns":"true","---Counter Settings---":"","Counter Font Size":"16","Counter Alignment":"center","Counter Buffer X":"0","Counter Buffer Y":"8","Counter Color":"0"}},
 {"name":"YEP_SkillCore","status":true,"description":"v1.11 Skills are now given more functions and the ability\nto require different types of costs.","parameters":{"---General---":"","Cost Padding":"4","Command Alignment":"center","Window Columns":"2","---HP Costs---":"","HP Format":"%1%2","HP Font Size":"20","HP Text Color":"18","HP Icon":"162","---MP Costs---":"","MP Format":"%1%2","MP Font Size":"20","MP Text Color":"23","MP Icon":"165","---TP Costs---":"","TP Format":"%1%2","TP Font Size":"20","TP Text Color":"29","TP Icon":"164"}},
@@ -43,5 +44,6 @@ var $plugins =
 {"name":"-------------------------","status":true,"description":"","parameters":{}},
 {"name":"LeTBS_YanflyPatch","status":true,"description":"Fixes compatibility issues with Yanfly's plugins","parameters":{}},
 {"name":"TweenJS_MVPatch","status":true,"description":"","parameters":{}},
-{"name":"LeTBS_BattleFlow","status":true,"description":"Improve popups and show states alterations","parameters":{}}
+{"name":"LeTBS_BattleFlow","status":true,"description":"Improve popups and show states alterations","parameters":{}},
+{"name":"LeTBS_LibsLoader","status":true,"description":"","parameters":{}}
 ];

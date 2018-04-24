@@ -179,6 +179,11 @@ function processBattleEnd() {
     });
 }
 
+var arr = [];
+for (var i = 0; i < 1000; i++) {
+    arr[i] = i;
+}
 
-let lol = [...new Set([4,4,4,8,7,6,5,5,8])];
-console.log("lol:" ,lol);
+function someFn(ix) {
+    return ix * 5 + 1 / 3 * 8;
+}
