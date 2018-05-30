@@ -1,6 +1,6 @@
 TERMS OF USE
 
-Copyright (c) 2016 Lecode
+Copyright (c) 2018 Lecode
 
 -Free for use in commercial and non commercial Rpg Maker MV projects with credit.
 -Keep the header of all my plugins.
